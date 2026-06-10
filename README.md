@@ -67,7 +67,7 @@ Trace is an open-source, local-first analytical web application designed for aca
 
 ### 📖 Tutorial
 
-1. **Configure API**: Click the settings icon to set up your LLM provider (e.g., OpenAI, LM Studio, Ollama). All data is processed locally in your browser.
+1. **Configure API**: Click the settings icon to set up your LLM provider (e.g., OpenAI, LM Studio, Ollama). All data is processed locally in your browser.If there is no API available, you can purchase it from the official websites of major platforms or use a free API: https://github.com/tashfeenahmed/freellmapi
 2. **Create Project**: Click "New Project" and define the event or topic you want to analyze.
 3. **Ingest Data**: In the Data & Article Manager, use **Add Text** or **Research** to gather source materials.
 4. **Run Analysis**: Set your **TARGET NODES/PASS** and click **Deep Extract All** to extract the initial network. Use **Connect Existing** to discover hidden links, and run **AI Merge** to clean up duplicate entities.
@@ -131,12 +131,12 @@ Trace 是一个基于本地的 AI 分析工具，专为研究人员、媒体分�
 
 ### 📖 使用教程
 
-1. **配置 API**：点击右上角设置图标配置您的大语言模型（支持 OpenAI, LM Studio, Ollama 等）。数据全程在本地浏览器处理。
-2. **创建项目**：点击“New Project”创建一个新项目，设定您要分析的主题。
-3. **导入数据**：进入项目后，使用控制台的 **添加文本 (Add Text)** 导入自有文献，或点击 **自动研究 (Research)** 让 AI 帮您收集上下文。
-4. **运行分析**：设定好 **单次提取密度 (TARGET NODES/PASS)**，点击 **深度提取全部 (Deep Extract All)** 开始提炼叙事网络。您还可以使用 **连接现有节点 (Connect Existing)** 挖掘潜在关联，最后通过 **AI 实体合并 (AI Merge)** 清洗冗余节点。
-5. **探索拓扑图**：切换到 **拓扑图 (Topology)** 标签页。使用 **手动排版 (Manual)** 拖拽梳理网络，或在 **探索 (Explore)** 模式下点击节点查看局部关系。
-6. **筛选与导出**：通过侧边栏过滤不需要的连线，排版完成后，即可将分析结果导出为结构化数据或高清大图。
+1. **配置 API**：点击右上角设置图标配置您的大语言模型（支持 OpenAI, LM Studio, Ollama 等）。数据全程在本地浏览器处理。若没有api可以从各大平台官网购买获取或者使用免费API: https://github.com/tashfeenahmed/freellmapi
+3. **创建项目**：点击“New Project”创建一个新项目，设定您要分析的主题。
+4. **导入数据**：进入项目后，使用控制台的 **添加文本 (Add Text)** 导入自有文献，或点击 **自动研究 (Research)** 让 AI 帮您收集上下文。
+5. **运行分析**：设定好 **单次提取密度 (TARGET NODES/PASS)**，点击 **深度提取全部 (Deep Extract All)** 开始提炼叙事网络。您还可以使用 **连接现有节点 (Connect Existing)** 挖掘潜在关联，最后通过 **AI 实体合并 (AI Merge)** 清洗冗余节点。
+6. **探索拓扑图**：切换到 **拓扑图 (Topology)** 标签页。使用 **手动排版 (Manual)** 拖拽梳理网络，或在 **探索 (Explore)** 模式下点击节点查看局部关系。
+7. **筛选与导出**：通过侧边栏过滤不需要的连线，排版完成后，即可将分析结果导出为结构化数据或高清大图。
 
 
 ## 🛡️ License

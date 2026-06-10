@@ -5,10 +5,10 @@
 ---
 
 <p align="center">
-  <img src="./assets/demo1.png" alt="Trace Dashboard Demo">
+  <img src="./assets/demo1.png" width="600" alt="Trace Dashboard Demo">
 </p>
 <p align="center">
-  <img src="./assets/demo2.png" alt="Trace Topology Demo">
+  <img src="./assets/demo2.png" width="600" alt="Trace Topology Demo">
 </p>
 
 

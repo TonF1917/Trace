@@ -5,14 +5,12 @@
 ---
 
 <p align="center">
-  <img src="./assets/demo1.png" width="800" alt="Trace Dashboard Demo">
+  <img src="./assets/demo1.png" alt="Trace Dashboard Demo">
 </p>
 <p align="center">
-  <img src="./assets/demo2.png" width="800" alt="Trace Topology Demo">
+  <img src="./assets/demo2.png" alt="Trace Topology Demo">
 </p>
-<p align="center">
-  <img src="./assets/demo3.png" width="800" alt="Trace Topology Exported Image">
-</p>
+
 
 
 <h2 id="english">🇬🇧 English</h2>

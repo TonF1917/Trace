@@ -172,6 +172,7 @@ export function Dashboard() {
   };
 
   const openProject = (id) => {
+    useStore.getState().initializeFromDatabase();
     setActiveProject(id);
     navigate(`/project/${id}`);
   };

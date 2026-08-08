@@ -37,7 +37,7 @@ export function Workspace() {
   const [researchTopic, setResearchTopic] = useState('');
   const [isResearching, setIsResearching] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
-  const [exportSettings, setExportSettings] = useState({ nodeScale: 1, textScale: 1 });
+  const [exportSettings, setExportSettings] = useState({ nodeScale: 1.9, textScale: 1.25, edgeScale: 1.0, arrowScale: 0.5, spreadScale: 0.8 });
   const hoverTimeoutRef = useRef(null);
   
   const fileInputRef = useRef(null);
@@ -52,6 +52,7 @@ export function Workspace() {
   const [graphMode, setGraphMode] = useState('explore');
   const [showGroupEnclosures, setShowGroupEnclosures] = useState(true);
   const [showCurvedEdges, setShowCurvedEdges] = useState(true);
+  const [fontFamily, setFontFamily] = useState('serif');
   const [showDebug, setShowDebug] = useState(false);
 
   useEffect(() => {
@@ -999,6 +1000,8 @@ export function Workspace() {
                   setShowGroupEnclosures={setShowGroupEnclosures}
                   showCurvedEdges={showCurvedEdges}
                   setShowCurvedEdges={setShowCurvedEdges}
+                  fontFamily={fontFamily}
+                  setFontFamily={setFontFamily}
                   showDebug={showDebug}
                   setShowDebug={setShowDebug}
                 />
@@ -1050,6 +1053,7 @@ export function Workspace() {
                   showFrequencies={showFrequencies}
                   showGroupEnclosures={showGroupEnclosures}
                   showCurvedEdges={showCurvedEdges}
+                  fontFamily={fontFamily}
                   showDebug={showDebug}
                   graphMode={graphMode}
                   relationColors={project.relationColors || {}}
@@ -1063,44 +1067,84 @@ export function Workspace() {
                 />
                 
                 {/* Floating Aesthetics Panel */}
-                <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-6 bg-white/95 backdrop-blur border border-slate-200 rounded-full shadow-lg p-2 px-8 z-40">
-                  <div className="flex items-center gap-2">
+                <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-4 bg-white/95 backdrop-blur border border-slate-200 rounded-full shadow-lg p-2 px-6 z-40">
+                  <div className="flex items-center gap-1">
                     <span className="text-[10px] font-bold text-slate-500 uppercase">{t('Aesthetics:')}</span>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] font-bold text-slate-400">{t('Spread')}</span>
+                    <input 
+                      type="range" min="0.8" max="2.5" step="0.05" 
+                      value={exportSettings.spreadScale ?? 0.8}
+                      onChange={e => setExportSettings(p => ({...p, spreadScale: parseFloat(e.target.value) || 0.8}))}
+                      className="w-14 h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer"
+                      title={t('Spread out node distances')}
+                    />
+                    <input 
+                      type="number" min="0.8" max="2.5" step="0.05" 
+                      value={exportSettings.spreadScale ?? 0.8}
+                      onChange={e => setExportSettings(p => ({...p, spreadScale: parseFloat(e.target.value) || 0.8}))}
+                      className="w-11 px-1 py-0.5 text-[10px] font-mono font-bold bg-slate-100 border border-slate-200 rounded text-slate-700 text-center focus:outline-none focus:ring-1 focus:ring-rose-400"
+                    />
+                  </div>
+                  <div className="flex items-center gap-1.5">
                     <span className="text-[10px] font-bold text-slate-400">{t('Nodes')}</span>
                     <input 
-                      type="range" min="0.5" max="2" step="0.1" 
-                      value={exportSettings.nodeScale}
-                      onChange={e => setExportSettings(p => ({...p, nodeScale: parseFloat(e.target.value)}))}
-                      className="w-16 h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer"
+                      type="range" min="0.5" max="3" step="0.05" 
+                      value={exportSettings.nodeScale ?? 1.9}
+                      onChange={e => setExportSettings(p => ({...p, nodeScale: parseFloat(e.target.value) || 1.0}))}
+                      className="w-14 h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer"
+                    />
+                    <input 
+                      type="number" min="0.5" max="3" step="0.05" 
+                      value={exportSettings.nodeScale ?? 1.9}
+                      onChange={e => setExportSettings(p => ({...p, nodeScale: parseFloat(e.target.value) || 1.0}))}
+                      className="w-11 px-1 py-0.5 text-[10px] font-mono font-bold bg-slate-100 border border-slate-200 rounded text-slate-700 text-center focus:outline-none focus:ring-1 focus:ring-rose-400"
                     />
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5">
                     <span className="text-[10px] font-bold text-slate-400">{t('Labels')}</span>
                     <input 
-                      type="range" min="0.5" max="2" step="0.1" 
-                      value={exportSettings.textScale}
-                      onChange={e => setExportSettings(p => ({...p, textScale: parseFloat(e.target.value)}))}
-                      className="w-16 h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer"
+                      type="range" min="0.5" max="3" step="0.05" 
+                      value={exportSettings.textScale ?? 1.25}
+                      onChange={e => setExportSettings(p => ({...p, textScale: parseFloat(e.target.value) || 1.0}))}
+                      className="w-14 h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer"
+                    />
+                    <input 
+                      type="number" min="0.5" max="3" step="0.05" 
+                      value={exportSettings.textScale ?? 1.25}
+                      onChange={e => setExportSettings(p => ({...p, textScale: parseFloat(e.target.value) || 1.0}))}
+                      className="w-11 px-1 py-0.5 text-[10px] font-mono font-bold bg-slate-100 border border-slate-200 rounded text-slate-700 text-center focus:outline-none focus:ring-1 focus:ring-rose-400"
                     />
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5">
                     <span className="text-[10px] font-bold text-slate-400">{t('Edges')}</span>
                     <input 
-                      type="range" min="0.5" max="3" step="0.1" 
-                      value={exportSettings.edgeScale || 1}
-                      onChange={e => setExportSettings(p => ({...p, edgeScale: parseFloat(e.target.value)}))}
-                      className="w-16 h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer"
+                      type="range" min="0.5" max="3" step="0.05" 
+                      value={exportSettings.edgeScale ?? 1.0}
+                      onChange={e => setExportSettings(p => ({...p, edgeScale: parseFloat(e.target.value) || 1.0}))}
+                      className="w-14 h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer"
+                    />
+                    <input 
+                      type="number" min="0.5" max="3" step="0.05" 
+                      value={exportSettings.edgeScale ?? 1.0}
+                      onChange={e => setExportSettings(p => ({...p, edgeScale: parseFloat(e.target.value) || 1.0}))}
+                      className="w-11 px-1 py-0.5 text-[10px] font-mono font-bold bg-slate-100 border border-slate-200 rounded text-slate-700 text-center focus:outline-none focus:ring-1 focus:ring-rose-400"
                     />
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5">
                     <span className="text-[10px] font-bold text-slate-400">{t('Arrows')}</span>
                     <input 
-                      type="range" min="0.5" max="3" step="0.1" 
-                      value={exportSettings.arrowScale || 1}
-                      onChange={e => setExportSettings(p => ({...p, arrowScale: parseFloat(e.target.value)}))}
-                      className="w-16 h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer"
+                      type="range" min="0.1" max="3" step="0.05" 
+                      value={exportSettings.arrowScale ?? 0.5}
+                      onChange={e => setExportSettings(p => ({...p, arrowScale: parseFloat(e.target.value) || 0.1}))}
+                      className="w-14 h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer"
+                    />
+                    <input 
+                      type="number" min="0.1" max="3" step="0.05" 
+                      value={exportSettings.arrowScale ?? 0.5}
+                      onChange={e => setExportSettings(p => ({...p, arrowScale: parseFloat(e.target.value) || 0.1}))}
+                      className="w-11 px-1 py-0.5 text-[10px] font-mono font-bold bg-slate-100 border border-slate-200 rounded text-slate-700 text-center focus:outline-none focus:ring-1 focus:ring-rose-400"
                     />
                   </div>
                 </div>

@@ -1,7 +1,7 @@
 import React, { useMemo, useRef, useEffect, useState, useCallback } from 'react';
 import ForceGraph2D from 'react-force-graph-2d';
 import { forceX, forceY, forceCollide } from 'd3-force';
-import { detectCommunitiesLouvain, COMMUNITY_COLORS } from '../utils/graphAnalytics';
+import { detectCommunitiesLouvain, COMMUNITY_COLORS, calculateDegreeCentrality } from '../utils/graphAnalytics';
 
 export const DEFAULT_RELATION_COLORS = {
   'Opposes / Blames': '#b2182b',     // Deep Red
@@ -55,7 +55,7 @@ const getConvexHull = (points) => {
   return lower.concat(upper);
 };
 
-export function BlameNetwork({ allArticles, filteredArticles, sources, hoveredArticle, showSourceNodes, showFrequencies, showGroupEnclosures = true, showCurvedEdges = true, showDebug = false, relationColors = {}, onColorChange, isExporting, exportSettings = { nodeScale: 1, textScale: 1 }, graphMode = 'explore', onLinkSelected }) {
+export function BlameNetwork({ allArticles, filteredArticles, sources, hoveredArticle, showSourceNodes, showFrequencies, showGroupEnclosures = true, showCurvedEdges = true, fontFamily = 'serif', showDebug = false, relationColors = {}, onColorChange, isExporting = false, exportSettings = { nodeScale: 1.9, textScale: 1.25, edgeScale: 1.0, arrowScale: 0.5, spreadScale: 0.8 }, graphMode = 'explore', onLinkSelected }) {
   const RELATION_COLORS = useMemo(() => ({ ...DEFAULT_RELATION_COLORS, ...relationColors }), [relationColors]);
   const containerRef = useRef(null);
   // Reference to the ForceGraph component
@@ -63,6 +63,16 @@ export function BlameNetwork({ allArticles, filteredArticles, sources, hoveredAr
   const hasFit = useRef(false);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
   const [hiddenRelations, setHiddenRelations] = useState(new Set());
+  // Community highlight: null = all visible, number/string = only that group is highlighted
+  const [selectedCommunity, setSelectedCommunity] = useState(null);
+  // Hovered group from legend hover interaction
+  const [hoveredGroup, setHoveredGroup] = useState(null);
+  // Legend View Modes: 'community' | 'centrality' | 'stance'
+  const [legendGroupMode, setLegendGroupMode] = useState('community');
+  // Collapsible legend toggle
+  const [isLegendCollapsed, setIsLegendCollapsed] = useState(false);
+  // Per-frame label collision list — cleared at frame start, populated as labels are drawn
+  const labelOccupiedRects = useRef([]);
 
   const toggleRelation = (relationName) => {
     setHiddenRelations(prev => {
@@ -245,7 +255,7 @@ export function BlameNetwork({ allArticles, filteredArticles, sources, hoveredAr
 
 
 
-    const minFreq = exportSettings.minFreq || 1;
+    const minFreq = exportSettings?.minFreq || 1;
     const freqFilteredNodes = Array.from(currentNodesMap.values()).filter(n => {
       if (n.group === 'source') return true;
       return (n.rawVal >= minFreq);
@@ -276,25 +286,91 @@ export function BlameNetwork({ allArticles, filteredArticles, sources, hoveredAr
       l.source !== l.target
     );
 
-    // Calculate dynamic curvature to prevent overlapping edges between same nodes
+    // Compute node degrees, inDegree, and outDegree for adaptive D3 forces, fan-out, and stance groups
+    const degreeStatsMap = calculateDegreeCentrality(finalNodes, finalLinks);
+    finalNodes.forEach(n => {
+      const stats = degreeStatsMap.get(n.id) || { degree: 1, inDegree: 0, outDegree: 0 };
+      n.degree = stats.degree || 1;
+      n.inDegree = stats.inDegree || 0;
+      n.outDegree = stats.outDegree || 0;
+    });
+    const nodeDegreeMap = new Map();
+    finalNodes.forEach(n => nodeDegreeMap.set(n.id, n.degree));
+
+    // --- Robust Fan-out Curvature Algorithm ---
+    // Step 1: Build a stable per-node edge list, sorted by linkIndex for consistency
     const pairMap = new Map();
-    finalLinks.forEach(l => {
+    const nodeLinksMap = new Map(); // nodeId -> [{link, isSource}]
+    finalNodes.forEach(n => nodeLinksMap.set(n.id, []));
+
+    finalLinks.forEach((l, idx) => {
       const s = typeof l.source === 'object' ? l.source.id : l.source;
       const t = typeof l.target === 'object' ? l.target.id : l.target;
       const pairId = [s, t].sort().join('|');
       if (!pairMap.has(pairId)) pairMap.set(pairId, []);
       pairMap.get(pairId).push(l);
+
+      if (nodeLinksMap.has(s)) nodeLinksMap.get(s).push({ link: l, isSource: true });
+      if (nodeLinksMap.has(t)) nodeLinksMap.get(t).push({ link: l, isSource: false });
+      l.linkIndex = idx;
     });
-    
-    pairMap.forEach(group => {
-      if (group.length > 1) {
-        group.forEach((l, i) => {
-          const sign = i % 2 === 0 ? 1 : -1;
-          const step = Math.ceil((i + 1) / 2);
-          l.dynamicCurvature = sign * Math.min(0.22 * step, 0.6);
-        });
+
+    // Step 2: For each edge, compute a unique fan-out slot based on its position
+    // in the hub node's sorted edge list. This guarantees no two edges get the same curvature.
+    finalLinks.forEach(l => {
+      const s = typeof l.source === 'object' ? l.source.id : l.source;
+      const t = typeof l.target === 'object' ? l.target.id : l.target;
+      const pairId = [s, t].sort().join('|');
+      const pairGroup = pairMap.get(pairId) || [];
+
+      if (pairGroup.length > 1) {
+        // Multi-edge between same pair: fan out symmetrically
+        const pairIdx = pairGroup.indexOf(l);
+        const sign = pairIdx % 2 === 0 ? 1 : -1;
+        const step = Math.ceil((pairIdx + 1) / 2);
+        l.dynamicCurvature = sign * Math.min(0.15 + 0.10 * step, 0.38);
+        l.fanIndex = pairIdx;
+        l.fanTotal = pairGroup.length;
+        return;
+      }
+
+      // Single edge: use visible, elegant hub fan-out
+      const sDegree = nodeDegreeMap.get(s) || 1;
+      const tDegree = nodeDegreeMap.get(t) || 1;
+      const maxDeg = Math.max(sDegree, tDegree);
+
+      if (!showCurvedEdges || maxDeg < 3) {
+        l.dynamicCurvature = 0;
+        l.fanIndex = 0;
+        l.fanTotal = 1;
+        return;
+      }
+
+      // Pick the hub node (higher degree) to compute fan slot
+      const hubId = sDegree >= tDegree ? s : t;
+      const hubEntries = nodeLinksMap.get(hubId) || [];
+      // Sort by linkIndex so slot assignment is deterministic
+      hubEntries.sort((a, b) => a.link.linkIndex - b.link.linkIndex);
+      const hubIdx = hubEntries.findIndex(e => e.link === l);
+      const hubTotal = hubEntries.length;
+
+      // Set single edge curvature range to [-0.28, +0.28] for clearly visible, elegant arcs
+      const maxCurve = Math.min(0.08 + 0.04 * hubTotal, 0.28);
+      const normalizedPos = hubTotal > 1 ? (hubIdx / (hubTotal - 1)) * 2 - 1 : 0; // [-1, 1]
+      l.dynamicCurvature = normalizedPos * maxCurve;
+      l.fanIndex = hubIdx;
+      l.fanTotal = hubTotal;
+    });
+
+    // Assign community weights: Opposes/Incites = 0 (don't merge), Supports/Belongs = 1.5 (strongly cohesive)
+    finalLinks.forEach(l => {
+      const rel = (l.label || '').toLowerCase();
+      if (rel.includes('opposes') || rel.includes('blames') || rel.includes('incites')) {
+        l.communityWeight = 0; // antagonistic — should NOT pull nodes into same community
+      } else if (rel.includes('supports') || rel.includes('allies') || rel.includes('belongs') || rel.includes('represents')) {
+        l.communityWeight = 2.0; // strongly cohesive
       } else {
-        group[0].dynamicCurvature = 0; // Keep single directed links straight and clean
+        l.communityWeight = 1.0;
       }
     });
 
@@ -311,7 +387,32 @@ export function BlameNetwork({ allArticles, filteredArticles, sources, hoveredAr
       links: finalLinks,
       communities
     };
-  }, [allArticles, filteredArticles, sources, showSourceNodes, hiddenRelations, exportSettings.minFreq]);
+  }, [allArticles, filteredArticles, sources, showSourceNodes, hiddenRelations, showCurvedEdges, exportSettings?.minFreq]);
+
+  // Active group filter: hovered takes priority over clicked/selected
+  const activeGroupFilter = hoveredGroup !== null ? hoveredGroup : selectedCommunity;
+
+  // Helper to check if a node belongs to a given group in the current legend mode
+  const isNodeInGroup = useCallback((node, mode, groupId) => {
+    if (groupId === null || groupId === undefined || !node) return true;
+    if (mode === 'community') {
+      return node.communityId === groupId;
+    }
+    if (mode === 'centrality') {
+      const deg = node.degree || 1;
+      if (groupId === 'hubs') return deg >= 5;
+      if (groupId === 'bridges') return deg >= 3 && deg <= 4;
+      if (groupId === 'periphery') return deg <= 2;
+    }
+    if (mode === 'stance') {
+      const inD = node.inDegree || 0;
+      const outD = node.outDegree || 0;
+      if (groupId === 'blamers') return outD > inD;
+      if (groupId === 'targets') return inD > outD;
+      if (groupId === 'neutral') return inD === outD;
+    }
+    return true;
+  }, []);
 
   // Clean, non-overlapping community enclosures
   const enclosureGroups = useMemo(() => {
@@ -327,6 +428,9 @@ export function BlameNetwork({ allArticles, filteredArticles, sources, hoveredAr
   }, [graphData.communities, showGroupEnclosures]);
 
   const drawEnclosures = useCallback((ctx, globalScale) => {
+    // Clear per-frame label collision list at the start of every frame
+    labelOccupiedRects.current = [];
+
     if (!showGroupEnclosures || enclosureGroups.length === 0) return;
 
     const nodeMap = new Map();
@@ -359,11 +463,12 @@ export function BlameNetwork({ allArticles, filteredArticles, sources, hoveredAr
         b = parseInt(hex.slice(5, 7), 16);
       }
 
-      ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.04)`;
-      ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, 0.35)`;
+      const isGroupActive = activeGroupFilter === group.id && legendGroupMode === 'community';
+      ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${isGroupActive ? 0.18 : 0.05})`;
+      ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${isGroupActive ? 0.85 : 0.25})`;
 
       const edgeScale = exportSettings?.edgeScale || 1;
-      ctx.lineWidth = 1.5 * edgeScale;
+      ctx.lineWidth = (isGroupActive ? 3.0 : 1.5) * edgeScale;
       ctx.lineJoin = 'round';
       ctx.setLineDash([5 * edgeScale, 5 * edgeScale]);
 
@@ -384,19 +489,45 @@ export function BlameNetwork({ allArticles, filteredArticles, sources, hoveredAr
   useEffect(() => {
     if (graphData.nodes.length > 0 && dimensions.width > 0 && dimensions.height > 0 && fgRef.current) {
       try {
+        const spread = exportSettings?.spreadScale ?? 0.8;
+        const nodeScale = exportSettings?.nodeScale || 1.9;
+        const textScale = exportSettings?.textScale || 1.25;
+
+        // 1. Scaled collision radius based on node radius + text padding
+        fgRef.current.d3Force('collide', forceCollide().radius(n => {
+          const r = (n.academicRadius || 10) * nodeScale;
+          return r + 28 * textScale;
+        }).strength(1.0).iterations(10));
+
+        // 2. Strong degree-weighted repulsion so hubs & large nodes never overlap
         const chargeForce = fgRef.current.d3Force('charge');
         if (chargeForce && typeof chargeForce.strength === 'function') {
-          chargeForce.strength(-450);
+          chargeForce.strength(n => {
+            const deg = n.degree || 1;
+            const r = (n.academicRadius || 10) * nodeScale;
+            return (-500 - 150 * Math.log2(1 + deg) - 15 * r) * spread;
+          });
         }
 
+        // 3. Link distance guaranteed to exceed the sum of radii of connected nodes + padding
         const linkForce = fgRef.current.d3Force('link');
         if (linkForce && typeof linkForce.distance === 'function') {
-          linkForce.distance(130);
+          linkForce.distance(link => {
+            const sNode = typeof link.source === 'object' ? link.source : {};
+            const tNode = typeof link.target === 'object' ? link.target : {};
+            const sR = (sNode.academicRadius || 10) * nodeScale;
+            const tR = (tNode.academicRadius || 10) * nodeScale;
+            const maxDeg = Math.max(sNode.degree || 1, tNode.degree || 1);
+            return Math.max(110 * spread, (sR + tR + 55 * textScale + 8 * Math.min(maxDeg, 8)) * spread);
+          });
         }
 
-        fgRef.current.d3Force('x', forceX(0).strength(0.04));
-        fgRef.current.d3Force('y', forceY(0).strength(0.04));
-        fgRef.current.d3Force('collide', forceCollide().radius(n => (n.academicRadius || 10) * (exportSettings?.nodeScale || 1) + 25).strength(1.0).iterations(5));
+        const gravityFn = n => {
+          const deg = n.degree || 1;
+          return Math.max(0.035, 0.035 + 0.035 / deg);
+        };
+        fgRef.current.d3Force('x', forceX(20).strength(gravityFn));
+        fgRef.current.d3Force('y', forceY(0).strength(gravityFn));
         
         if (typeof fgRef.current.d3ReheatSimulation === 'function') {
           fgRef.current.d3ReheatSimulation();
@@ -429,6 +560,8 @@ export function BlameNetwork({ allArticles, filteredArticles, sources, hoveredAr
   const nodeCanvasObject = useCallback((node, ctx) => {
     try {
       const isFilteredOut = filteredArticles.length < allArticles.length && !activeNodeIds.has(node.id);
+      // Group highlight / dimming: dim nodes outside active group
+      const isGroupDimmed = activeGroupFilter !== null && !isNodeInGroup(node, legendGroupMode, activeGroupFilter);
       let isHighlighted = true;
       if (graphMode === 'explore' && hoveredArticle) {
         const activeArticle = allArticles.find(a => a.id === hoveredArticle);
@@ -443,91 +576,114 @@ export function BlameNetwork({ allArticles, filteredArticles, sources, hoveredAr
       }
 
       const alpha = isHighlighted ? 1 : 0.15;
+      // Apply group dimming on top of highlight alpha
+      const effectiveAlpha = isGroupDimmed ? Math.min(alpha, 0.08) : alpha;
       const nodeRadius = (node.academicRadius || 10) * (exportSettings?.nodeScale || 1);
       const safeName = node.name || 'Unknown';
       const label = showFrequencies && node.group !== 'source' ? `${safeName} (${node.rawVal || 0})` : safeName;
 
-      ctx.globalAlpha = alpha;
+      ctx.globalAlpha = effectiveAlpha;
       ctx.beginPath();
       ctx.arc(node.x, node.y, nodeRadius, 0, 2 * Math.PI, false);
       ctx.fillStyle = node.color || '#94a3b8';
       ctx.fill();
-      ctx.strokeStyle = '#334155';
-      ctx.lineWidth = 1;
+      ctx.strokeStyle = isGroupDimmed ? '#cbd5e1' : (activeGroupFilter !== null && !isGroupDimmed ? '#0284c7' : '#334155');
+      ctx.lineWidth = activeGroupFilter !== null && !isGroupDimmed ? 2.5 : 1;
       ctx.stroke();
 
-      const shouldDrawLabel = true;
-      if ((!isFilteredOut || alpha > 0.05) && shouldDrawLabel) {
-        const sizeRatio = Math.max(0.75, Math.min(1.8, nodeRadius / 15));
-        const baseFontSize = node.group === 'source' ? 12 : (10 * sizeRatio);
-        const fontSize = baseFontSize * (exportSettings?.textScale || 1);
-        const fontWeight = sizeRatio > 1.2 ? 'bold' : 'normal';
-        
-        ctx.font = `${fontWeight} ${fontSize}px "Times New Roman", Times, serif`;
-        
-        const words = label.split(' ');
-        const lines = [];
-        let currentLine = '';
-        words.forEach(word => {
-          const testLine = currentLine ? currentLine + ' ' + word : word;
-          if (currentLine && testLine.length > 20) {
-            lines.push(currentLine);
-            currentLine = word;
-          } else {
-            currentLine = testLine;
+        const shouldDrawLabel = true;
+        // Hub nodes (degree ≥ 4) always show their label.
+        // Leaf nodes skip if another label is within 30 screen-px to prevent clutter.
+        const nodeDegree = node.degree || 1;
+        const isHub = nodeDegree >= 4;
+        if ((!isFilteredOut || alpha > 0.05) && shouldDrawLabel) {
+          const sizeRatio = Math.max(0.75, Math.min(1.8, nodeRadius / 15));
+          const baseFontSize = node.group === 'source' ? 12 : (10 * sizeRatio);
+          const fontSize = baseFontSize * (exportSettings?.textScale || 1);
+          const fontFam = fontFamily === 'serif' ? '"Times New Roman", Times, serif' : 'Inter, -apple-system, sans-serif';
+          const fontWeight = isHighlighted ? 'bold' : (sizeRatio > 1.2 ? 'bold' : 'normal');
+          ctx.font = `${fontWeight} ${fontSize}px ${fontFam}`;
+          
+          const words = label.split(' ');
+          const lines = [];
+          let currentLine = '';
+          words.forEach(word => {
+            const testLine = currentLine ? currentLine + ' ' + word : word;
+            if (currentLine && testLine.length > 20) {
+              lines.push(currentLine);
+              currentLine = word;
+            } else {
+              currentLine = testLine;
+            }
+          });
+          if (currentLine) lines.push(currentLine);
+          
+          const lineHeight = fontSize * 1.25;
+          const textX = node.x;
+          const startTextY = node.y + nodeRadius + 6 * (exportSettings?.textScale || 1);
+          // Label center for collision detection (midpoint of all text lines)
+          const labelCenterY = startTextY + (lines.length - 1) * lineHeight / 2;
+
+          // Per-frame label collision check (shared list with edge labels)
+          // globalScale is NOT available here; store raw canvas coords.
+          // Use a fixed 35-unit canvas distance threshold as proxy.
+          const occupied = labelOccupiedRects.current;
+          const LABEL_CANVAS_DIST = 35; // approximate canvas units for 30 screen-px at default zoom
+          const tooClose = occupied.some(p =>
+            Math.hypot(p.x - textX, p.y - labelCenterY) < LABEL_CANVAS_DIST
+          );
+
+          // Skip low-degree nodes that would overlap; always draw hubs
+          if (!tooClose || isHub) {
+            occupied.push({ x: textX, y: labelCenterY });
+
+            ctx.globalAlpha = (isFilteredOut || isGroupDimmed) ? 0.06 : effectiveAlpha;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
+
+            // White stroke halo to isolate label text from background edge lines
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 8 * (exportSettings?.textScale || 1);
+            ctx.lineJoin = 'round';
+            ctx.miterLimit = 2;
+
+            lines.forEach((line, i) => {
+              const y = startTextY + (i * lineHeight);
+              ctx.strokeText(line, textX, y);
+            });
+
+            ctx.fillStyle = isHighlighted ? '#0f172a' : '#334155';
+            lines.forEach((line, i) => {
+              const y = startTextY + (i * lineHeight);
+              ctx.fillText(line, textX, y);
+            });
           }
-        });
-        if (currentLine) lines.push(currentLine);
-        
-        const lineHeight = fontSize * 1.25;
-        const textX = node.x;
-        const startTextY = node.y + nodeRadius + 6 * (exportSettings?.textScale || 1);
-        
-        ctx.globalAlpha = isFilteredOut ? 0.1 : alpha;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'top';
-        ctx.font = `${isHighlighted ? 'bold ' : ''}${fontSize}px Inter, -apple-system, sans-serif`;
-
-        // White stroke halo to completely isolate label text from background edge lines
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 5 * (exportSettings?.textScale || 1);
-        ctx.lineJoin = 'round';
-        ctx.miterLimit = 2;
-
-        lines.forEach((line, i) => {
-          const y = startTextY + (i * lineHeight);
-          ctx.strokeText(line, textX, y);
-        });
-
-        ctx.fillStyle = isHighlighted ? '#0f172a' : '#334155';
-        lines.forEach((line, i) => {
-          const y = startTextY + (i * lineHeight);
-          ctx.fillText(line, textX, y);
-        });
-        
-        ctx.shadowBlur = 0;
-      }
+          
+          ctx.shadowBlur = 0;
+        }
       ctx.globalAlpha = 1; 
     } catch (err) {
       console.error('Canvas rendering error:', err);
     }
-  }, [hoveredArticle, allArticles, filteredArticles, activeNodeIds, exportSettings, showFrequencies, graphMode]);
+  }, [hoveredArticle, allArticles, filteredArticles, activeNodeIds, exportSettings, showFrequencies, graphMode, fontFamily, activeGroupFilter, legendGroupMode, isNodeInGroup]);
 
   const linkColor = useCallback(link => {
     let isHighlighted = true;
     if (hoveredArticle) {
       isHighlighted = link.articleIds.has(hoveredArticle);
     }
-    
-    const alpha = isHighlighted ? 0.8 : 0.05;
+    const isGroupDimmed = activeGroupFilter !== null && 
+      (!isNodeInGroup(link.source, legendGroupMode, activeGroupFilter) && !isNodeInGroup(link.target, legendGroupMode, activeGroupFilter));
+
+    const alpha = isGroupDimmed ? 0.03 : (isHighlighted ? 0.8 : 0.05);
     const hex = link.color.replace('#', '');
     const r = parseInt(hex.substring(0,2), 16);
     const g = parseInt(hex.substring(2,4), 16);
     const b = parseInt(hex.substring(4,6), 16);
     return `rgba(${r},${g},${b}, ${alpha})`;
-  }, [hoveredArticle]);
+  }, [hoveredArticle, activeGroupFilter, legendGroupMode, isNodeInGroup]);
 
-  const linkCanvasObject = useCallback((link, ctx) => {
+  const linkCanvasObject = useCallback((link, ctx, globalScale) => {
     try {
       if (link.label === 'mentions' || link.label === 'mentions target') return; // Hide source links
       
@@ -544,24 +700,74 @@ export function BlameNetwork({ allArticles, filteredArticles, sources, hoveredAr
     const dx = end.x - start.x;
     const dy = end.y - start.y;
     const dist = Math.hypot(dx, dy);
+    const scale = exportSettings?.nodeScale || 1;
 
-    // If nodes are too close, hide the text so it doesn't overlap with the Actor circles/labels
-    if (dist < 80 * exportSettings.nodeScale) return;
+    // If nodes are too close, skip rendering to avoid clutter
+    if (dist < 50 * scale) return;
 
-    let textPos = {
-      x: start.x + dx / 2,
-      y: start.y + dy / 2
+    const curvature = showCurvedEdges ? (link.dynamicCurvature || 0) : 0;
+
+    // --- Bezier control point (exact formula used by react-force-graph-2d for curved links) ---
+    const midX = (start.x + end.x) / 2;
+    const midY = (start.y + end.y) / 2;
+    const cX = curvature !== 0 ? midX + dy * curvature : midX;
+    const cY = curvature !== 0 ? midY - dx * curvature : midY;
+
+    // --- Compute t-parameter: spread labels along the curve based on fan slot ---
+    const fanIndex = link.fanIndex ?? 0;
+    const fanTotal = link.fanTotal ?? 1;
+    let tParam;
+    if (fanTotal <= 1) {
+      tParam = 0.5;
+    } else {
+      // Spread t across [0.36, 0.64] based on fan position
+      const tRange = Math.min(0.12 + 0.03 * fanTotal, 0.26);
+      tParam = 0.5 + ((fanIndex / (fanTotal - 1)) * 2 - 1) * tRange;
+    }
+    tParam = Math.max(0.32, Math.min(0.68, tParam));
+
+    // Evaluate point on quadratic Bezier at tParam
+    const oneMinusT = 1 - tParam;
+    const textPos = {
+      x: oneMinusT * oneMinusT * start.x + 2 * oneMinusT * tParam * cX + tParam * tParam * end.x,
+      y: oneMinusT * oneMinusT * start.y + 2 * oneMinusT * tParam * cY + tParam * tParam * end.y,
     };
 
-    // If the edge is curved, shift the text outward to perfectly sit on the apex of the bezier curve
-    if (showCurvedEdges && link.dynamicCurvature) {
-      textPos.x += dy * link.dynamicCurvature * 0.5;
-      textPos.y += -dx * link.dynamicCurvature * 0.5;
-    }
+    // Evaluate exact Bezier curve tangent vector at tParam
+    const tangentX = 2 * oneMinusT * (cX - start.x) + 2 * tParam * (end.x - cX);
+    const tangentY = 2 * oneMinusT * (cY - start.y) + 2 * tParam * (end.y - cY);
 
     const relLabel = link.label.split(/[\s/]/)[0]; // Extract 'Opposes' from 'Opposes / Blames'
 
-    let angle = Math.atan2(dy, dx);
+    const textScale = exportSettings?.textScale || 1.25;
+
+    // --- Strict Edge Label Avoidance ---
+    // 1. Skip if edge label lands inside any node circle or near any node text label
+    const collidesWithNodeOrLabel = (graphData.nodes || []).some(n => {
+      const nr = (n.academicRadius || 10) * scale + 22 * scale;
+      // Circle collision check
+      if (Math.hypot(n.x - textPos.x, n.y - textPos.y) < nr) return true;
+
+      // Node text label bounding box collision check
+      const labelY = n.y + (n.academicRadius || 10) * scale + 10 * textScale;
+      const labelHalfW = Math.max(35, (n.name || '').length * 4.8 * textScale);
+      const labelHalfH = 14 * textScale;
+      if (Math.abs(n.x - textPos.x) < labelHalfW + 18 && Math.abs(labelY - textPos.y) < labelHalfH + 14) {
+        return true;
+      }
+      return false;
+    });
+    if (collidesWithNodeOrLabel) return;
+
+    // 2. Skip if edge label collides with an already-drawn edge label
+    const minCanvasDist = 32 * textScale;
+    const occupied = labelOccupiedRects.current;
+    if (occupied.some(p => Math.hypot(p.x - textPos.x, p.y - textPos.y) < minCanvasDist)) {
+      return; // Skip — too close to another edge label
+    }
+    occupied.push({ x: textPos.x, y: textPos.y });
+
+    let angle = Math.atan2(tangentY, tangentX);
     // Keep text upright
     if (angle > Math.PI / 2 || angle < -Math.PI / 2) {
       angle += Math.PI;
@@ -571,30 +777,28 @@ export function BlameNetwork({ allArticles, filteredArticles, sources, hoveredAr
     ctx.translate(textPos.x, textPos.y);
     ctx.rotate(angle);
 
-    ctx.font = `italic ${9 * exportSettings.textScale}px "Times New Roman", Times, serif`;
-    const alpha = isHighlighted ? 0.9 : 0.4;
-    
-    // Completely opaque white background to "cut" the relationship line
-    const textWidth = ctx.measureText(relLabel).width;
-    const bckgDimensions = [textWidth, 10 * exportSettings.textScale].map(n => n + 4);
-    ctx.fillStyle = '#ffffff';
-    // Center it exactly on the axis (0 offset) to cut through the line
-    ctx.fillRect(-bckgDimensions[0] / 2, -bckgDimensions[1] / 2, bckgDimensions[0], bckgDimensions[1]);
+    const activeFontFam = fontFamily === 'serif' ? '"Times New Roman", Times, serif' : 'Inter, -apple-system, sans-serif';
+    ctx.font = `${fontFamily === 'serif' ? 'italic ' : '500 '}${12 * (exportSettings?.textScale || 1)}px ${activeFontFam}`;
+    const alpha = isHighlighted ? 0.95 : 0.40;
 
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    
-    // Draw a white halo to ensure curved lines are fully cut out around the text
+
+    ctx.globalAlpha = alpha;
+
+    // White text stroke halo to isolate text cleanly from underlying lines
     ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 3;
+    ctx.lineWidth = 5 * (exportSettings?.textScale || 1);
+    ctx.lineJoin = 'round';
+    ctx.miterLimit = 2;
     ctx.strokeText(relLabel, 0, 0);
 
-    ctx.fillStyle = `rgba(100, 116, 139, ${alpha})`;
+    ctx.fillStyle = `rgba(15, 23, 42, ${alpha})`;
     ctx.fillText(relLabel, 0, 0);
     
     ctx.restore();
     } catch (err) {}
-  }, [hoveredArticle, activeArticleIds, filteredArticles, allArticles, graphMode, exportSettings]);
+  }, [hoveredArticle, activeArticleIds, filteredArticles, allArticles, graphMode, showCurvedEdges, fontFamily, exportSettings, labelOccupiedRects]);
 
   // Find which relations are actually used in the current dataset
   const usedRelations = useMemo(() => {
@@ -659,98 +863,271 @@ export function BlameNetwork({ allArticles, filteredArticles, sources, hoveredAr
           transformOrigin: 'top left'
         }}
       >
+        {/* Modern HTML Legend Overlay — collapsible, responsive, zero overlap */}
         <div 
-          className={`absolute top-6 left-6 z-10 ${graphMode === 'figure' ? 'bg-white/80 backdrop-blur-md border border-slate-200 shadow-sm rounded-xl p-3' : 'p-2'}`} 
+          className={`absolute top-6 left-6 z-10 bg-white/95 backdrop-blur-md border border-slate-200/90 shadow-sm rounded-xl p-3 max-h-[85vh] overflow-y-auto text-xs select-none transition-all duration-200 ${
+            isLegendCollapsed ? 'w-auto' : 'w-[220px]'
+          }`}
           style={{ 
-            resize: isExporting ? 'none' : 'both',
-            overflow: 'hidden',
-            width: '230px', 
-            minWidth: '100px',
-            maxWidth: '50vw',
-            background: 'transparent', 
-            padding: '8px',
+            fontFamily: fontFamily === 'serif' ? '"Times New Roman", Times, serif' : 'Inter, -apple-system, sans-serif',
             transform: `scale(${exportScale})`,
             transformOrigin: 'top left'
           }}
         >
-          <svg 
-            width="100%" 
-            height="auto" 
-            style={{ display: 'block', fontFamily: '"Times New Roman", Times, serif' }}
-            viewBox={`0 0 230 ${100 + Object.keys(RELATION_COLORS).filter(n => !hiddenRelations.has(n)).length * 15}`} 
-            preserveAspectRatio="xMinYMin meet"
-          >
-            {showSourceNodes && (
-              <g transform="translate(0, -5)">
-                <rect x="10" y="28" width="6" height="6" fill="#9ca3af" stroke="black" strokeWidth="0.5" />
-                <text x="24" y="35" fontSize="11" fill="black">Document Source</text>
-              </g>
+          {/* Legend Header with Collapse Toggle */}
+          <div className="flex items-center justify-between font-semibold italic text-slate-700 pb-1 mb-1 border-b border-slate-100 gap-3">
+            <span>Legend</span>
+            {!isExporting && (
+              <button 
+                onClick={() => setIsLegendCollapsed(!isLegendCollapsed)}
+                className="px-1.5 py-0.5 text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-600 rounded cursor-pointer font-sans not-italic transition-colors shrink-0"
+                title={isLegendCollapsed ? "Expand legend" : "Collapse legend"}
+              >
+                {isLegendCollapsed ? 'Expand ▾' : 'Collapse ▴'}
+              </button>
             )}
-            
-            <g transform={`translate(0, ${showSourceNodes ? 10 : -5})`}>
-              <rect x="10" y="28" width="6" height="6" fill="#6b7280" stroke="black" strokeWidth="0.5" />
-              <text x="24" y="35" fontSize="11" fill="black">Actor</text>
-              
-              <text x="10" y="56" fontSize="10" fontStyle="italic" fill="black">Edge Types:</text>
-              
-              {Array.from(usedRelations)
-                .map((name, index) => {
-                  const color = RELATION_COLORS[name] || RELATION_COLORS.default;
-                  const displayWord = name === 'default' ? 'Unknown' : name.split(/[\s/]/)[0];
-                  return { name, color, displayWord };
-                })
-                .filter(item => !isExporting || !hiddenRelations.has(item.name))
-                .map((item, idx) => {
-                  const isHidden = hiddenRelations.has(item.name);
-                  return (
-                    <g key={item.name} transform={`translate(0, ${68 + idx * 15})`} style={{ opacity: isHidden ? 0.4 : 1 }}>
-                      <line x1="10" y1="-3" x2="26" y2="-3" stroke={item.color} strokeWidth="1.5" strokeDasharray={isHidden ? "2,2" : "none"} />
-                      {!isExporting && (
-                        <foreignObject x="6" y="-8" width="24" height="10">
-                          <input 
-                            type="color" 
-                            value={item.color} 
-                            onChange={(e) => onColorChange && onColorChange(item.name, e.target.value)}
-                            style={{ opacity: 0, width: '100%', height: '100%', cursor: 'pointer', display: 'block' }}
-                            title={`Click to change color for ${item.name}`}
-                          />
-                        </foreignObject>
-                      )}
-                      <text 
-                        x="34" y="0" 
-                        fontSize="11" 
-                        fill="black"
-                        style={{ cursor: 'pointer', textDecoration: isHidden ? 'line-through' : 'none' }}
-                        onClick={() => toggleRelation(item.name)}
-                      >
-                        {item.displayWord}
-                      </text>
-                    </g>
-                  );
-                })
-              }
-            </g>
+          </div>
 
-            {(() => {
-              const activeRelations = Array.from(usedRelations).filter(n => !isExporting || !hiddenRelations.has(n));
-              const totalRelations = activeRelations.length > 0 ? activeRelations.length : 1;
-              const baseY = (showSourceNodes ? 10 : -5) + 68 + totalRelations * 15 + 5;
-              return (
-                <g transform={`translate(0, ${baseY})`}>
-                  <circle cx="14" cy="5" r="1.5" fill="black" />
-                  <text x="20" y="8" fontSize="9" fill="black">Node size is proportional to frequency.</text>
-                  <circle cx="14" cy="18" r="1.5" fill="black" />
-                  <text x="20" y="21" fontSize="9" fill="black">Arrows indicate relation direction.</text>
-                  {(graphMode === 'explore' || showFrequencies) && (
-                    <>
-                      <circle cx="14" cy="31" r="1.5" fill="black" />
-                      <text x="20" y="34" fontSize="9" fill="black">Labels (N) indicate appearance count.</text>
-                    </>
+          {!isLegendCollapsed && (
+            <>
+              {/* Node Types */}
+              <div className="space-y-1 my-2">
+                {showSourceNodes && (
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 bg-gray-400 border border-slate-700 rounded-sm shrink-0" />
+                    <span className="text-slate-800 font-medium">Document Source</span>
+                  </div>
+                )}
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 bg-slate-500 border border-slate-700 rounded-sm shrink-0" />
+                  <span className="text-slate-800 font-medium">Actor</span>
+                </div>
+              </div>
+
+              {/* Edge Types */}
+              <div className="border-t border-slate-100 pt-2 space-y-1">
+                <div className="text-[11px] font-semibold italic text-slate-600 mb-1">Edge Types:</div>
+                {Array.from(usedRelations)
+                  .map(name => ({
+                    name,
+                    color: RELATION_COLORS[name] || RELATION_COLORS.default,
+                    displayWord: name === 'default' ? 'Unknown' : name.split(/[\s/]/)[0]
+                  }))
+                  .filter(item => !isExporting || !hiddenRelations.has(item.name))
+                  .map(item => {
+                    const isHidden = hiddenRelations.has(item.name);
+                    return (
+                      <div 
+                        key={item.name} 
+                        className={`flex items-center justify-between group rounded px-1 py-0.5 transition-colors ${isHidden ? 'opacity-40' : 'hover:bg-slate-50'}`}
+                      >
+                        <div 
+                          className="flex items-center gap-2 cursor-pointer flex-1 min-w-0"
+                          onMouseEnter={() => setHoveredGroup(`rel-${item.name}`)}
+                          onMouseLeave={() => setHoveredGroup(null)}
+                          onClick={() => toggleRelation(item.name)}
+                        >
+                          <span 
+                            className="w-4 h-[2px] rounded-full shrink-0"
+                            style={{ backgroundColor: item.color }}
+                          />
+                          <span className={`truncate text-slate-800 ${isHidden ? 'line-through' : ''}`}>
+                            {item.displayWord}
+                          </span>
+                        </div>
+                        {!isExporting && (
+                          <div className="relative w-3.5 h-3.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <input 
+                              type="color" 
+                              value={item.color} 
+                              onChange={(e) => onColorChange && onColorChange(item.name, e.target.value)}
+                              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                              title={`Change color for ${item.name}`}
+                            />
+                            <span className="block w-full h-full rounded-full border border-slate-300 shadow-2xs" style={{ backgroundColor: item.color }} />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                }
+              </div>
+
+              {/* Notes */}
+              <div className="border-t border-slate-100 pt-2 mt-2 space-y-1 text-[10.5px] text-slate-500">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-1 h-1 rounded-full bg-slate-400 shrink-0" />
+                  <span>Node size is proportional to frequency</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-1 h-1 rounded-full bg-slate-400 shrink-0" />
+                  <span>Arrows indicate relation direction</span>
+                </div>
+                {(graphMode === 'explore' || showFrequencies) && (
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-1 h-1 rounded-full bg-slate-400 shrink-0" />
+                    <span>Labels (N) indicate appearance count</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Groups Section with View Mode Tabs */}
+              <div className="border-t border-slate-100 pt-2 mt-2 space-y-1.5">
+                <div className="text-[11px] font-semibold italic text-slate-600 flex items-center justify-between">
+                  <span>Group Modes</span>
+                  {selectedCommunity !== null && !isExporting && (
+                    <button 
+                      onClick={() => setSelectedCommunity(null)}
+                      className="text-[9.5px] text-indigo-600 hover:underline normal-case font-sans cursor-pointer"
+                    >
+                      Reset
+                    </button>
                   )}
-                </g>
-              );
-            })()}
-          </svg>
+                </div>
+
+                {/* Mode Selector Tabs */}
+                {!isExporting && (
+                  <div className="flex items-center p-0.5 bg-slate-100/90 rounded-md text-[9.5px] font-sans gap-0.5 select-none">
+                    <button
+                      onClick={() => { setLegendGroupMode('community'); setSelectedCommunity(null); }}
+                      className={`flex-1 py-0.5 text-center rounded transition-all cursor-pointer ${
+                        legendGroupMode === 'community' ? 'bg-white shadow-2xs font-bold text-slate-800' : 'text-slate-500 hover:text-slate-700'
+                      }`}
+                      title="Group by Louvain algorithmic communities"
+                    >
+                      Louvain
+                    </button>
+                    <button
+                      onClick={() => { setLegendGroupMode('centrality'); setSelectedCommunity(null); }}
+                      className={`flex-1 py-0.5 text-center rounded transition-all cursor-pointer ${
+                        legendGroupMode === 'centrality' ? 'bg-white shadow-2xs font-bold text-slate-800' : 'text-slate-500 hover:text-slate-700'
+                      }`}
+                      title="Group by network centrality tiers (Hubs, Bridges, Periphery)"
+                    >
+                      Centrality
+                    </button>
+                    <button
+                      onClick={() => { setLegendGroupMode('stance'); setSelectedCommunity(null); }}
+                      className={`flex-1 py-0.5 text-center rounded transition-all cursor-pointer ${
+                        legendGroupMode === 'stance' ? 'bg-white shadow-2xs font-bold text-slate-800' : 'text-slate-500 hover:text-slate-700'
+                      }`}
+                      title="Group by actor stance (Blamers, Targets, Neutral)"
+                    >
+                      Stance
+                    </button>
+                  </div>
+                )}
+
+                {/* Render Items for Current Mode */}
+                {(() => {
+                  const nodeMap = new Map();
+                  (graphData.nodes || []).forEach(n => nodeMap.set(n.id, n));
+
+                  if (legendGroupMode === 'community') {
+                    const visibleComms = (graphData.communities || [])
+                      .filter(c => c.members && c.members.length >= 2)
+                      .slice(0, 8);
+                    return (
+                      <div className="space-y-0.5 mt-1">
+                        {visibleComms.map((comm, i) => {
+                          const color = comm.color || COMMUNITY_COLORS[comm.id % COMMUNITY_COLORS.length];
+                          const topNodeId = (comm.members || [])
+                            .slice()
+                            .sort((a, b) => (nodeMap.get(b)?.degree || 0) - (nodeMap.get(a)?.degree || 0))[0];
+                          const topName = nodeMap.get(topNodeId)?.name || `Group ${i + 1}`;
+                          const isSelected = selectedCommunity === comm.id;
+                          const isHovered = hoveredGroup === comm.id;
+                          const isActive = isSelected || isHovered;
+                          return (
+                            <div
+                              key={comm.id}
+                              onMouseEnter={() => setHoveredGroup(comm.id)}
+                              onMouseLeave={() => setHoveredGroup(null)}
+                              onClick={() => setSelectedCommunity(isSelected ? null : comm.id)}
+                              className={`flex items-center gap-2 px-1.5 py-1 rounded transition-all text-[11px] cursor-pointer ${
+                                isActive ? 'bg-indigo-50/80 font-bold text-slate-900 shadow-2xs ring-1 ring-indigo-200' : 'hover:bg-slate-50 text-slate-700'
+                              }`}
+                            >
+                              <span className="w-3.5 h-[3px] rounded-full shrink-0" style={{ backgroundColor: color }} />
+                              <span className="text-slate-400 text-[10px] font-mono shrink-0">{`G${i + 1}`}</span>
+                              <span className="truncate flex-1">{topName}</span>
+                              <span className="text-[9.5px] text-slate-400 font-mono">({comm.members?.length || 0})</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  }
+
+                  if (legendGroupMode === 'centrality') {
+                    const centralityItems = [
+                      { id: 'hubs', label: 'Hubs (核心节点)', color: '#0284c7', count: (graphData.nodes || []).filter(n => (n.degree || 1) >= 5).length },
+                      { id: 'bridges', label: 'Bridges (桥接节点)', color: '#059669', count: (graphData.nodes || []).filter(n => (n.degree || 1) >= 3 && (n.degree || 1) <= 4).length },
+                      { id: 'periphery', label: 'Periphery (边缘节点)', color: '#94a3b8', count: (graphData.nodes || []).filter(n => (n.degree || 1) <= 2).length },
+                    ];
+                    return (
+                      <div className="space-y-0.5 mt-1">
+                        {centralityItems.map((item) => {
+                          const isSelected = selectedCommunity === item.id;
+                          const isHovered = hoveredGroup === item.id;
+                          const isActive = isSelected || isHovered;
+                          return (
+                            <div
+                              key={item.id}
+                              onMouseEnter={() => setHoveredGroup(item.id)}
+                              onMouseLeave={() => setHoveredGroup(null)}
+                              onClick={() => setSelectedCommunity(isSelected ? null : item.id)}
+                              className={`flex items-center gap-2 px-1.5 py-1 rounded transition-all text-[11px] cursor-pointer ${
+                                isActive ? 'bg-indigo-50/80 font-bold text-slate-900 shadow-2xs ring-1 ring-indigo-200' : 'hover:bg-slate-50 text-slate-700'
+                              }`}
+                            >
+                              <span className="w-3 h-3 rounded-full shrink-0 border border-slate-300" style={{ backgroundColor: item.color }} />
+                              <span className="truncate flex-1 font-medium">{item.label}</span>
+                              <span className="text-[9.5px] text-slate-400 font-mono">({item.count})</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  }
+
+                  if (legendGroupMode === 'stance') {
+                    const stanceItems = [
+                      { id: 'blamers', label: 'Accusers / Blamers (指控方)', color: '#dc2626', count: (graphData.nodes || []).filter(n => (n.outDegree || 0) > (n.inDegree || 0)).length },
+                      { id: 'targets', label: 'Targets / Accused (受指控方)', color: '#2563eb', count: (graphData.nodes || []).filter(n => (n.inDegree || 0) > (n.outDegree || 0)).length },
+                      { id: 'neutral', label: 'Dual / Neutral (中立/双向)', color: '#7c3aed', count: (graphData.nodes || []).filter(n => (n.inDegree || 0) === (n.outDegree || 0)).length },
+                    ];
+                    return (
+                      <div className="space-y-0.5 mt-1">
+                        {stanceItems.map((item) => {
+                          const isSelected = selectedCommunity === item.id;
+                          const isHovered = hoveredGroup === item.id;
+                          const isActive = isSelected || isHovered;
+                          return (
+                            <div
+                              key={item.id}
+                              onMouseEnter={() => setHoveredGroup(item.id)}
+                              onMouseLeave={() => setHoveredGroup(null)}
+                              onClick={() => setSelectedCommunity(isSelected ? null : item.id)}
+                              className={`flex items-center gap-2 px-1.5 py-1 rounded transition-all text-[11px] cursor-pointer ${
+                                isActive ? 'bg-indigo-50/80 font-bold text-slate-900 shadow-2xs ring-1 ring-indigo-200' : 'hover:bg-slate-50 text-slate-700'
+                              }`}
+                            >
+                              <span className="w-3 h-3 rounded-sm shrink-0 border border-slate-300" style={{ backgroundColor: item.color }} />
+                              <span className="truncate flex-1 font-medium">{item.label}</span>
+                              <span className="text-[9.5px] text-slate-400 font-mono">({item.count})</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
+              </div>
+            </>
+          )}
+        </div>
 
           {/* DIAGNOSTIC PANEL FOR DEBUGGING */}
           {showDebug && (
@@ -768,7 +1145,6 @@ export function BlameNetwork({ allArticles, filteredArticles, sources, hoveredAr
               )}
             </div>
           )}
-        </div>
         
         {graphData.nodes.length > 0 ? (
           <ForceGraph2D
@@ -779,10 +1155,10 @@ export function BlameNetwork({ allArticles, filteredArticles, sources, hoveredAr
             nodeLabel="name"
             nodeRelSize={6}
             linkColor={linkColor}
-            linkWidth={link => ((hoveredArticle && link.articleIds.has(hoveredArticle)) ? 2 : 0.6) * (exportSettings.edgeScale || 1) * exportScale}
+            linkWidth={link => ((hoveredArticle && link.articleIds.has(hoveredArticle)) ? 2 : 0.6) * (exportSettings?.edgeScale || 1) * exportScale}
             linkLineDash={link => link.dashed ? [4, 4] : null}
             linkCurvature={link => showCurvedEdges ? (link.dynamicCurvature !== undefined ? link.dynamicCurvature : 0.15) : 0} // Dynamic curvature so bidirectional arrows don't perfectly overlap and disappear
-            linkDirectionalArrowLength={10 * (exportSettings.arrowScale || 1)} // Clearly visible academic arrows
+            linkDirectionalArrowLength={10 * (exportSettings?.arrowScale || 1)} // Clearly visible academic arrows
             linkDirectionalArrowRelPos={1} // Put arrow EXACTLY at target node edge
             nodeRelSize={1} // Forces library to know our exact render radius (because val=r^2)
             linkDirectionalArrowColor={linkColor}

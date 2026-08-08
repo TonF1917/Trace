@@ -4,20 +4,21 @@
  * degree centralities (in/out/total), and overall network statistics.
  */
 
-// Palette of distinct, modern vibrant colors for Louvain communities
+// Morandi academic palette — muted, dignified, suitable for scholarly publications.
+// Each color is visually distinct yet harmonious on a white background.
 export const COMMUNITY_COLORS = [
-  '#3b82f6', // Bright Blue
-  '#10b981', // Emerald Green
-  '#f59e0b', // Amber/Yellow
-  '#ec4899', // Pink
-  '#8b5cf6', // Purple
-  '#06b6d4', // Cyan
-  '#f97316', // Orange
-  '#6366f1', // Indigo
-  '#14b8a6', // Teal
-  '#e11d48', // Rose Red
-  '#84cc16', // Lime
-  '#a855f7'  // Violet
+  '#6d8fad', // Steel blue
+  '#7a9e87', // Sage green
+  '#b89c7a', // Warm taupe
+  '#9d849e', // Dusty mauve
+  '#7a9ea8', // Soft teal
+  '#ad8e6d', // Warm sand
+  '#8a8fb8', // Periwinkle
+  '#a89d84', // Warm stone
+  '#8aada2', // Pale jade
+  '#b08a8a', // Dusty rose
+  '#8fa88a', // Olive sage
+  '#a68aad', // Soft lavender
 ];
 
 /**
@@ -167,7 +168,9 @@ export function detectCommunitiesLouvain(nodes, links) {
     if (s === t) return;
 
     if (adj.has(s) && adj.has(t)) {
-      const w = (link.weight || 1);
+      // communityWeight allows BlameNetwork to downweight antagonistic edges (Opposes → 0)
+      const w = Math.max(0, link.communityWeight !== undefined ? link.communityWeight : (link.weight || 1));
+      if (w === 0) return; // Skip edges that shouldn't contribute to community cohesion
       adj.get(s).set(t, (adj.get(s).get(t) || 0) + w);
       adj.get(t).set(s, (adj.get(t).get(s) || 0) + w);
       totalWeight += w;

@@ -7,6 +7,7 @@ export function ViewControls({
   showFrequencies, setShowFrequencies,
   showGroupEnclosures, setShowGroupEnclosures,
   showCurvedEdges, setShowCurvedEdges,
+  fontFamily, setFontFamily,
   showDebug, setShowDebug
 }) {
   const { t } = useTranslation();
@@ -72,6 +73,25 @@ export function ViewControls({
           />
           {t('Curve')}
         </label>
+        <div className="w-px h-4 bg-slate-200 mx-1"></div>
+        <div className="flex bg-slate-100 p-0.5 rounded-md">
+          <button 
+            type="button"
+            onClick={() => setFontFamily && setFontFamily('sans')}
+            className={`px-2 py-0.5 text-[10px] font-bold rounded transition-all ${fontFamily === 'sans' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
+            title={t('Modern Sans-Serif Font (Inter)')}
+          >
+            Sans
+          </button>
+          <button 
+            type="button"
+            onClick={() => setFontFamily && setFontFamily('serif')}
+            className={`px-2 py-0.5 text-[10px] font-serif font-bold rounded transition-all ${fontFamily === 'serif' ? 'bg-white shadow-sm text-amber-700' : 'text-slate-500 hover:text-slate-700'}`}
+            title={t('Academic Serif Font (Times New Roman)')}
+          >
+            Serif
+          </button>
+        </div>
         <div className="w-px h-4 bg-slate-200 mx-1"></div>
         <label className="flex items-center gap-1.5 text-xs font-bold text-slate-500 cursor-pointer hover:text-slate-700">
           <input 

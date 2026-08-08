@@ -279,7 +279,6 @@ export function BlameNetwork({ allArticles, filteredArticles, sources, hoveredAr
     // Calculate dynamic curvature to prevent overlapping edges between same nodes
     const pairMap = new Map();
     finalLinks.forEach(l => {
-      // Source and target might be objects if this runs after D3 initialization, but initially they are strings.
       const s = typeof l.source === 'object' ? l.source.id : l.source;
       const t = typeof l.target === 'object' ? l.target.id : l.target;
       const pairId = [s, t].sort().join('|');
@@ -292,11 +291,10 @@ export function BlameNetwork({ allArticles, filteredArticles, sources, hoveredAr
         group.forEach((l, i) => {
           const sign = i % 2 === 0 ? 1 : -1;
           const step = Math.ceil((i + 1) / 2);
-          // Cap the curvature at 1.0 (semi-circle) to prevent massive curves from glitching the canvas
-          l.dynamicCurvature = sign * Math.min(0.15 * step, 1.0);
+          l.dynamicCurvature = sign * Math.min(0.22 * step, 0.6);
         });
       } else {
-        group[0].dynamicCurvature = 0.15;
+        group[0].dynamicCurvature = 0; // Keep single directed links straight and clean
       }
     });
 
@@ -315,97 +313,59 @@ export function BlameNetwork({ allArticles, filteredArticles, sources, hoveredAr
     };
   }, [allArticles, filteredArticles, sources, showSourceNodes, hiddenRelations, exportSettings.minFreq]);
 
+  // Clean, non-overlapping community enclosures
   const enclosureGroups = useMemo(() => {
-    if (!showGroupEnclosures) return [];
-    
-    const parentMap = new Map();
-    graphData.links.forEach(l => {
-      if (l.label === 'Belongs To') {
-        const sourceId = typeof l.source === 'object' ? l.source.id : l.source;
-        const targetId = typeof l.target === 'object' ? l.target.id : l.target;
-        if (!parentMap.has(targetId)) parentMap.set(targetId, new Set());
-        parentMap.get(targetId).add(sourceId);
-      }
-    });
+    if (!showGroupEnclosures || !graphData.communities) return [];
 
-    const groups = [];
-    const getAllDescendants = (startId) => {
-      let descendants = new Set();
-      let stack = [startId];
-      let visited = new Set();
-      while (stack.length > 0) {
-        let currentId = stack.pop();
-        if (visited.has(currentId)) continue;
-        visited.add(currentId);
-        if (currentId !== startId) descendants.add(currentId);
-        if (parentMap.has(currentId)) parentMap.get(currentId).forEach(childId => stack.push(childId));
-      }
-      return descendants;
-    };
-
-    parentMap.forEach((_, parentId) => {
-      const allDescendants = getAllDescendants(parentId);
-      if (allDescendants.size > 0) groups.push({ parentId, childrenIds: allDescendants, color: null });
-    });
-
-    // Fallback/Supplement: If no Belongs To hierarchy exists, group by Louvain communities!
-    if (groups.length === 0 && graphData.communities) {
-      graphData.communities.forEach(comm => {
-        if (comm.members.length >= 2) {
-          const [first, ...rest] = comm.members;
-          groups.push({
-            parentId: first,
-            childrenIds: new Set(rest),
-            color: comm.color
-          });
-        }
-      });
-    }
-
-    groups.sort((a, b) => b.childrenIds.size - a.childrenIds.size);
-    return groups;
-  }, [graphData.links, graphData.communities, showGroupEnclosures]);
+    return graphData.communities
+      .filter(comm => comm.members && comm.members.length >= 2)
+      .map(comm => ({
+        id: comm.id,
+        memberIds: comm.members,
+        color: comm.color || COMMUNITY_COLORS[comm.id % COMMUNITY_COLORS.length]
+      }));
+  }, [graphData.communities, showGroupEnclosures]);
 
   const drawEnclosures = useCallback((ctx, globalScale) => {
-    if (!showGroupEnclosures) return;
+    if (!showGroupEnclosures || enclosureGroups.length === 0) return;
 
     const nodeMap = new Map();
     persistentNodes.current.forEach(n => nodeMap.set(n.id, n));
 
     ctx.save();
     enclosureGroups.forEach(group => {
-      const parentNode = nodeMap.get(group.parentId);
-      if (!parentNode || typeof parentNode.x !== 'number' || typeof parentNode.y !== 'number') return;
-
       const points = [];
-      const pr = (parentNode.academicRadius || 10) * (exportSettings?.nodeScale || 1) + 12;
-      points.push({x: parentNode.x, y: parentNode.y - pr});
-      points.push({x: parentNode.x, y: parentNode.y + pr});
-      points.push({x: parentNode.x - pr, y: parentNode.y});
-      points.push({x: parentNode.x + pr, y: parentNode.y});
 
-      group.childrenIds.forEach(cId => {
-        const cNode = nodeMap.get(cId);
-        if (cNode && typeof cNode.x === 'number' && typeof cNode.y === 'number') {
-          const cr = (cNode.academicRadius || 10) * (exportSettings?.nodeScale || 1) + 12;
-          points.push({x: cNode.x, y: cNode.y - cr});
-          points.push({x: cNode.x, y: cNode.y + cr});
-          points.push({x: cNode.x - cr, y: cNode.y});
-          points.push({x: cNode.x + cr, y: cNode.y});
+      group.memberIds.forEach(mId => {
+        const node = nodeMap.get(mId);
+        if (node && typeof node.x === 'number' && typeof node.y === 'number') {
+          const r = (node.academicRadius || 10) * (exportSettings?.nodeScale || 1) + 16;
+          points.push({ x: node.x, y: node.y - r });
+          points.push({ x: node.x, y: node.y + r });
+          points.push({ x: node.x - r, y: node.y });
+          points.push({ x: node.x + r, y: node.y });
         }
       });
 
+      if (points.length < 3) return;
       const hull = getConvexHull(points);
       if (hull.length < 3) return;
 
-      const hex = parentNode.color || '#94a3b8';
-      ctx.fillStyle = `rgba(${parseInt(hex.slice(1,3),16)}, ${parseInt(hex.slice(3,5),16)}, ${parseInt(hex.slice(5,7),16)}, 0.05)`;
-      ctx.strokeStyle = `rgba(${parseInt(hex.slice(1,3),16)}, ${parseInt(hex.slice(3,5),16)}, ${parseInt(hex.slice(5,7),16)}, 0.3)`;
-      
+      const hex = group.color || '#94a3b8';
+      let r = 148, g = 163, b = 184;
+      if (hex.startsWith('#') && hex.length === 7) {
+        r = parseInt(hex.slice(1, 3), 16);
+        g = parseInt(hex.slice(3, 5), 16);
+        b = parseInt(hex.slice(5, 7), 16);
+      }
+
+      ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.04)`;
+      ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, 0.35)`;
+
       const edgeScale = exportSettings?.edgeScale || 1;
-      ctx.lineWidth = 3 * edgeScale;
+      ctx.lineWidth = 1.5 * edgeScale;
       ctx.lineJoin = 'round';
-      ctx.setLineDash([8 * edgeScale, 8 * edgeScale]);
+      ctx.setLineDash([5 * edgeScale, 5 * edgeScale]);
 
       ctx.beginPath();
       hull.forEach((pt, i) => {
@@ -426,17 +386,17 @@ export function BlameNetwork({ allArticles, filteredArticles, sources, hoveredAr
       try {
         const chargeForce = fgRef.current.d3Force('charge');
         if (chargeForce && typeof chargeForce.strength === 'function') {
-          chargeForce.strength(-600);
+          chargeForce.strength(-450);
         }
 
         const linkForce = fgRef.current.d3Force('link');
         if (linkForce && typeof linkForce.distance === 'function') {
-          linkForce.distance(110);
+          linkForce.distance(130);
         }
 
-        fgRef.current.d3Force('x', forceX(0).strength(0.06));
-        fgRef.current.d3Force('y', forceY(0).strength(0.06));
-        fgRef.current.d3Force('collide', forceCollide().radius(n => (n.academicRadius || 10) * (exportSettings?.nodeScale || 1) + 22).strength(1.0).iterations(5));
+        fgRef.current.d3Force('x', forceX(0).strength(0.04));
+        fgRef.current.d3Force('y', forceY(0).strength(0.04));
+        fgRef.current.d3Force('collide', forceCollide().radius(n => (n.academicRadius || 10) * (exportSettings?.nodeScale || 1) + 25).strength(1.0).iterations(5));
         
         if (typeof fgRef.current.d3ReheatSimulation === 'function') {
           fgRef.current.d3ReheatSimulation();

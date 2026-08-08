@@ -422,20 +422,17 @@ export function BlameNetwork({ allArticles, filteredArticles, sources, hoveredAr
   const [hasInitialized, setHasInitialized] = useState(false);
 
   useEffect(() => {
-    hasFit.current = false;
-  }, [graphData]);
-
-  useEffect(() => {
-    if (graphData.nodes.length > 0 && dimensions.width > 0 && dimensions.height > 0 && !hasInitialized && fgRef.current) {
-      fgRef.current.d3Force('charge').strength(-400); 
-      fgRef.current.d3Force('link').distance(120);
-      fgRef.current.d3Force('x', forceX(0).strength(0.04));
-      fgRef.current.d3Force('y', forceY(0).strength(0.04));
-      fgRef.current.d3Force('collide', forceCollide().radius(n => (n.academicRadius || 10) * (exportSettings?.nodeScale || 1) + 20).iterations(3));
+    if (graphData.nodes.length > 0 && dimensions.width > 0 && dimensions.height > 0 && fgRef.current) {
+      fgRef.current.d3Force('charge', forceCollide ? null : undefined);
+      fgRef.current.d3Force('charge').strength(-1500); 
+      fgRef.current.d3Force('link').distance(200);
+      fgRef.current.d3Force('x', forceX(0).strength(0.015));
+      fgRef.current.d3Force('y', forceY(0).strength(0.015));
+      fgRef.current.d3Force('collide', forceCollide().radius(n => (n.academicRadius || 10) * (exportSettings?.nodeScale || 1) + 45).strength(1.0).iterations(8));
       
-      setHasInitialized(true);
+      fgRef.current.d3ReheatSimulation();
     }
-  }, [graphData.nodes.length, dimensions.width, dimensions.height, hasInitialized, exportSettings]);
+  }, [graphData.nodes.length, dimensions.width, dimensions.height, exportSettings]);
 
   const handleEngineStop = useCallback(() => {
     if (!hasFit.current && fgRef.current) {
@@ -509,21 +506,30 @@ export function BlameNetwork({ allArticles, filteredArticles, sources, hoveredAr
         });
         if (currentLine) lines.push(currentLine);
         
-        const lineHeight = fontSize * 1.2;
+        const lineHeight = fontSize * 1.25;
         const textX = node.x;
-        const startTextY = node.y + nodeRadius + 6;
+        const startTextY = node.y + nodeRadius + 6 * (exportSettings?.textScale || 1);
         
-        ctx.globalAlpha = isFilteredOut ? 0 : alpha;
+        ctx.globalAlpha = isFilteredOut ? 0.1 : alpha;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'top';
-        
-        ctx.shadowColor = 'rgba(255, 255, 255, 0.95)';
-        ctx.shadowBlur = 4 * (exportSettings?.textScale || 1);
-        ctx.fillStyle = isHighlighted ? '#000000' : '#1e293b';
+        ctx.font = `${isHighlighted ? 'bold ' : ''}${fontSize}px Inter, -apple-system, sans-serif`;
+
+        // White stroke halo to completely isolate label text from background edge lines
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 5 * (exportSettings?.textScale || 1);
+        ctx.lineJoin = 'round';
+        ctx.miterLimit = 2;
 
         lines.forEach((line, i) => {
-          ctx.fillText(line, textX, startTextY + (i * lineHeight));
-          ctx.fillText(line, textX, startTextY + (i * lineHeight));
+          const y = startTextY + (i * lineHeight);
+          ctx.strokeText(line, textX, y);
+        });
+
+        ctx.fillStyle = isHighlighted ? '#0f172a' : '#334155';
+        lines.forEach((line, i) => {
+          const y = startTextY + (i * lineHeight);
+          ctx.fillText(line, textX, y);
         });
         
         ctx.shadowBlur = 0;

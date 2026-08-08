@@ -93,131 +93,154 @@ export function BlameNetwork({ allArticles, filteredArticles, sources, hoveredAr
 
     const entityFrequencies = {};
     
+    const getRels = (article) => {
+      if (article.extractedData && Array.isArray(article.extractedData.relationships) && article.extractedData.relationships.length > 0) {
+        return article.extractedData.relationships;
+      }
+      if (article.actors && article.actors.main_actor && article.actors.blame_target) {
+        return [{
+          date: article.date,
+          main_actor: article.actors.main_actor,
+          blame_target: article.actors.blame_target,
+          relation_type: article.relation_type || 'Opposes / Blames',
+          frames: article.frames || [],
+          tone: article.tone || 'Neutral'
+        }];
+      }
+      return [];
+    };
+
     allArticles.forEach(article => {
-      const target = normalizeEntity(article.actors.blame_target);
-      const actor = normalizeEntity(article.actors.main_actor);
-      entityFrequencies[target] = (entityFrequencies[target] || 0) + 1;
-      entityFrequencies[actor] = (entityFrequencies[actor] || 0) + 1;
+      const rels = getRels(article);
+      rels.forEach(rel => {
+        const target = normalizeEntity(rel.blame_target);
+        const actor = normalizeEntity(rel.main_actor);
+        entityFrequencies[target] = (entityFrequencies[target] || 0) + 1;
+        entityFrequencies[actor] = (entityFrequencies[actor] || 0) + 1;
+      });
     });
 
     filteredArticles.forEach(article => {
       const sourceNodeId = `source-${article.source_id}`;
-      
-      const rawActor = (article.actors?.main_actor || 'Unknown').replace(/\s*\(.*?\)\s*/g, '').trim();
-      const rawTarget = (article.actors?.blame_target || 'Unknown').replace(/\s*\(.*?\)\s*/g, '').trim();
-      const mainActorId = `entity-${normalizeEntity(rawActor)}`;
-      const blameTargetId = `entity-${normalizeEntity(rawTarget)}`;
-      
-      if (showSourceNodes) {
-        if (!currentNodesMap.has(sourceNodeId)) {
-          if (!persistentNodes.current.has(sourceNodeId)) {
-            persistentNodes.current.set(sourceNodeId, { id: sourceNodeId, group: 'source' });
+      const rels = getRels(article);
+
+      rels.forEach((rel, relIndex) => {
+        const rawActor = (rel.main_actor || 'Unknown').replace(/\s*\(.*?\)\s*/g, '').trim();
+        const rawTarget = (rel.blame_target || 'Unknown').replace(/\s*\(.*?\)\s*/g, '').trim();
+        const mainActorId = `entity-${normalizeEntity(rawActor)}`;
+        const blameTargetId = `entity-${normalizeEntity(rawTarget)}`;
+        
+        if (showSourceNodes) {
+          if (!currentNodesMap.has(sourceNodeId)) {
+            if (!persistentNodes.current.has(sourceNodeId)) {
+              persistentNodes.current.set(sourceNodeId, { id: sourceNodeId, group: 'source' });
+            }
+            const sourceInfo = sources.find(s => s.id === article.source_id);
+            const sourceNode = persistentNodes.current.get(sourceNodeId);
+            sourceNode.name = sourceInfo ? sourceInfo.name : 'Unknown Source';
+            sourceNode.color = sourceInfo ? sourceInfo.color : '#cbd5e1';
+            sourceNode.val = 15;
+            currentNodesMap.set(sourceNodeId, sourceNode);
           }
-          const sourceInfo = sources.find(s => s.id === article.source_id);
-          const sourceNode = persistentNodes.current.get(sourceNodeId);
-          sourceNode.name = sourceInfo ? sourceInfo.name : 'Unknown Source';
-          sourceNode.color = sourceInfo ? sourceInfo.color : '#cbd5e1';
-          sourceNode.val = 15;
-          currentNodesMap.set(sourceNodeId, sourceNode);
-        }
-      }
-
-      if (!currentNodesMap.has(mainActorId)) {
-        const existingNode = persistentNodes.current.get(mainActorId);
-        if (!existingNode || typeof existingNode.x !== 'number' || !isFinite(existingNode.x) || Math.abs(existingNode.x) > 5000) {
-          persistentNodes.current.set(mainActorId, { 
-            id: mainActorId, 
-            group: 'actor',
-            x: Math.random() * 10 - 5,
-            y: Math.random() * 10 - 5
-          });
-        }
-        const actorNode = persistentNodes.current.get(mainActorId);
-        actorNode.name = rawActor;
-        actorNode.color = '#64748b'; 
-        const freq = entityFrequencies[normalizeEntity(rawActor)] || 1;
-        const baseRadius = Math.max(6, 6 * Math.sqrt(freq)); 
-        actorNode.academicRadius = baseRadius;
-        actorNode.val = baseRadius * baseRadius; 
-        actorNode.rawVal = freq;
-        currentNodesMap.set(mainActorId, actorNode);
-      }
-
-      if (!currentNodesMap.has(blameTargetId)) {
-        const existingNode = persistentNodes.current.get(blameTargetId);
-        if (!existingNode || typeof existingNode.x !== 'number' || !isFinite(existingNode.x) || Math.abs(existingNode.x) > 5000) {
-          persistentNodes.current.set(blameTargetId, { 
-            id: blameTargetId, 
-            group: 'target',
-            x: Math.random() * 10 - 5,
-            y: Math.random() * 10 - 5
-          });
-        }
-        const targetNode = persistentNodes.current.get(blameTargetId);
-        targetNode.name = rawTarget;
-        targetNode.color = '#64748b'; 
-        const freq = entityFrequencies[normalizeEntity(rawTarget)] || 1;
-        const baseRadius = Math.max(6, 6 * Math.sqrt(freq));
-        targetNode.academicRadius = baseRadius;
-        targetNode.val = baseRadius * baseRadius;
-        targetNode.rawVal = freq;
-        currentNodesMap.set(blameTargetId, targetNode);
-      }
-
-      if (showSourceNodes) {
-        const sourceToActorId = `${sourceNodeId}-${mainActorId}`;
-        if (!links.some(l => l.id === sourceToActorId)) {
-          links.push({
-            id: sourceToActorId,
-            source: sourceNodeId,
-            target: mainActorId,
-            label: 'mentions',
-            color: '#cbd5e1',
-            dashed: false,
-            articleIds: new Set([article.id])
-          });
         }
 
-        const sourceToTargetId = `${sourceNodeId}-${blameTargetId}`;
-        if (!links.some(l => l.id === sourceToTargetId)) {
-          links.push({
-            id: sourceToTargetId,
-            source: sourceNodeId,
-            target: blameTargetId,
-            label: 'mentions target',
-            color: '#cbd5e1',
-            dashed: true,
-            articleIds: new Set([article.id])
-          });
+        if (!currentNodesMap.has(mainActorId)) {
+          const existingNode = persistentNodes.current.get(mainActorId);
+          if (!existingNode || typeof existingNode.x !== 'number' || !isFinite(existingNode.x) || Math.abs(existingNode.x) > 5000) {
+            persistentNodes.current.set(mainActorId, { 
+              id: mainActorId, 
+              group: 'actor',
+              x: Math.random() * 10 - 5,
+              y: Math.random() * 10 - 5
+            });
+          }
+          const actorNode = persistentNodes.current.get(mainActorId);
+          actorNode.name = rawActor;
+          actorNode.color = '#64748b'; 
+          const freq = entityFrequencies[normalizeEntity(rawActor)] || 1;
+          const baseRadius = Math.max(6, 6 * Math.sqrt(freq)); 
+          actorNode.academicRadius = baseRadius;
+          actorNode.val = baseRadius * baseRadius; 
+          actorNode.rawVal = freq;
+          currentNodesMap.set(mainActorId, actorNode);
         }
-      }
-      
-      let rawRel = article.relation_type ? article.relation_type.trim() : 'Opposes / Blames';
-      
-      if (/rejects?\s*\/\s*denies?/i.test(rawRel) || /blames?\s*\/\s*opposes?/i.test(rawRel)) rawRel = 'Opposes / Blames';
-      if (/controls?\s*\/\s*dominates?/i.test(rawRel) || /^influences?$/i.test(rawRel)) rawRel = 'Influences / Controls';
-      if (/compromises?\s*with/i.test(rawRel) || /negotiates?\s*with/i.test(rawRel)) rawRel = 'Negotiates / Compromises';
-      if (/belongs?\s*to/i.test(rawRel)) rawRel = 'Belongs To';
-      
-      const relType = rawRel;
-      
-      if (!hiddenRelations.has(relType)) {
-        const linkColor = RELATION_COLORS[relType] || RELATION_COLORS.default;
-        const actorToTargetId = `${mainActorId}-${blameTargetId}-${relType}`;
-        if (!links.some(l => l.id === actorToTargetId)) {
-          links.push({
-            id: actorToTargetId,
-            source: mainActorId,
-            target: blameTargetId,
-            label: relType,
-            color: linkColor,
-            dashed: false,
-            articleIds: new Set([article.id])
-          });
-        } else {
-          links.find(l => l.id === actorToTargetId).articleIds.add(article.id);
+
+        if (!currentNodesMap.has(blameTargetId)) {
+          const existingNode = persistentNodes.current.get(blameTargetId);
+          if (!existingNode || typeof existingNode.x !== 'number' || !isFinite(existingNode.x) || Math.abs(existingNode.x) > 5000) {
+            persistentNodes.current.set(blameTargetId, { 
+              id: blameTargetId, 
+              group: 'target',
+              x: Math.random() * 10 - 5,
+              y: Math.random() * 10 - 5
+            });
+          }
+          const targetNode = persistentNodes.current.get(blameTargetId);
+          targetNode.name = rawTarget;
+          targetNode.color = '#64748b'; 
+          const freq = entityFrequencies[normalizeEntity(rawTarget)] || 1;
+          const baseRadius = Math.max(6, 6 * Math.sqrt(freq));
+          targetNode.academicRadius = baseRadius;
+          targetNode.val = baseRadius * baseRadius;
+          targetNode.rawVal = freq;
+          currentNodesMap.set(blameTargetId, targetNode);
         }
-      }
+
+        if (showSourceNodes) {
+          const sourceToActorId = `${sourceNodeId}-${mainActorId}`;
+          if (!links.some(l => l.id === sourceToActorId)) {
+            links.push({
+              id: sourceToActorId,
+              source: sourceNodeId,
+              target: mainActorId,
+              label: 'mentions',
+              color: '#cbd5e1',
+              dashed: false,
+              articleIds: new Set([article.id])
+            });
+          }
+
+          const sourceToTargetId = `${sourceNodeId}-${blameTargetId}`;
+          if (!links.some(l => l.id === sourceToTargetId)) {
+            links.push({
+              id: sourceToTargetId,
+              source: sourceNodeId,
+              target: blameTargetId,
+              label: 'mentions target',
+              color: '#cbd5e1',
+              dashed: true,
+              articleIds: new Set([article.id])
+            });
+          }
+        }
+        
+        let rawRel = rel.relation_type ? rel.relation_type.trim() : 'Opposes / Blames';
+        
+        if (/rejects?\s*\/\s*denies?/i.test(rawRel) || /blames?\s*\/\s*opposes?/i.test(rawRel)) rawRel = 'Opposes / Blames';
+        if (/controls?\s*\/\s*dominates?/i.test(rawRel) || /^influences?$/i.test(rawRel)) rawRel = 'Influences / Controls';
+        if (/compromises?\s*with/i.test(rawRel) || /negotiates?\s*with/i.test(rawRel)) rawRel = 'Negotiates / Compromises';
+        if (/belongs?\s*to/i.test(rawRel)) rawRel = 'Belongs To';
+        
+        const relType = rawRel;
+        
+        if (!hiddenRelations.has(relType)) {
+          const linkColor = RELATION_COLORS[relType] || RELATION_COLORS.default;
+          const actorToTargetId = `${mainActorId}-${blameTargetId}-${relType}`;
+          if (!links.some(l => l.id === actorToTargetId)) {
+            links.push({
+              id: actorToTargetId,
+              source: mainActorId,
+              target: blameTargetId,
+              label: relType,
+              color: linkColor,
+              dashed: false,
+              articleIds: new Set([article.id])
+            });
+          } else {
+            links.find(l => l.id === actorToTargetId).articleIds.add(article.id);
+          }
+        }
+      });
     });
 
 

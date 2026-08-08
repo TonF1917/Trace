@@ -28,612 +28,89 @@ const EXAMPLE_PROJECT = {
   isExample: true
 };
 
-const EXAMPLE_ARTICLES = [
-  {
-    id: 'nep-art-1',
-    projectId: 'example-nep-1921',
-    source_name: 'Pravda Archives (1921)',
-    source_id: 'pravda-archives-1921',
-    headline: 'Lenin Proposes the New Economic Policy at 10th Party Congress',
-    date: '1921-03-15',
-    url: 'https://archives.gov/nep-1921',
-    isProcessed: true,
-    actors: { main_actor: 'Vladimir Lenin', blame_target: 'War Communism' },
-    frames: ['ECONOMIC RECOVERY VS. IDEOLOGICAL PURITY', 'STATE CAPITALISM'],
-    tone: 'Critical',
-    relation_type: 'Opposes / Blames',
-    extractedData: {
-      relationships: [
-        {
-          date: '1921-03-15',
-          main_actor: 'Vladimir Lenin',
-          blame_target: 'War Communism',
-          relation_type: 'Opposes / Blames',
-          frames: ['ECONOMIC RECOVERY VS. IDEOLOGICAL PURITY'],
-          tone: 'Critical',
-          quote: 'War communism was imposed by war and ruin. It was not, nor could it be, a policy that corresponded to economic tasks.',
-          rationale: 'Lenin criticizes War Communism as unsustainable post-civil war.'
-        },
-        {
-          date: '1921-03-15',
-          main_actor: 'Vladimir Lenin',
-          blame_target: 'New Economic Policy',
-          relation_type: 'Supports / Allies',
-          frames: ['STATE CAPITALISM'],
-          tone: 'Objective',
-          quote: 'We must allow a degree of free trade and private enterprise to restore agricultural output.',
-          rationale: 'Lenin champions the NEP as necessary state capitalism.'
-        },
-        {
-          date: '1921-03-15',
-          main_actor: 'Vladimir Lenin',
-          blame_target: 'Gosplan',
-          relation_type: 'Influences / Controls',
-          frames: ['STATE CAPITALISM'],
-          tone: 'Objective',
-          quote: 'Gosplan must regulate market transactions while retaining command over heavy industry.',
-          rationale: 'Lenin guides state planning authority.'
-        },
-        {
-          date: '1921-03-15',
-          main_actor: 'Workers Opposition',
-          blame_target: 'Vladimir Lenin',
-          relation_type: 'Opposes / Blames',
-          frames: ['ECONOMIC RECOVERY VS. IDEOLOGICAL PURITY'],
-          tone: 'Alarmed',
-          quote: 'Reintroducing market mechanisms betrays the socialist goal of the revolution.',
-          rationale: 'Left-wing faction accuses Lenin of ideological compromise.'
-        },
-        {
-          date: '1921-03-15',
-          main_actor: 'Workers Opposition',
-          blame_target: 'Party Bureaucracy',
-          relation_type: 'Belongs To',
-          frames: ['INTRA-PARTY FACTIONALISM'],
-          tone: 'Critical',
-          quote: 'Trade unions must manage industry directly rather than bureaucratic appointees.',
-          rationale: 'Workers Opposition faction exists within the Bolshevik party.'
-        },
-        {
-          date: '1921-03-15',
-          main_actor: 'Industrial Proletariat',
-          blame_target: 'Worker Masses',
-          relation_type: 'Belongs To',
-          frames: ['SOCIAL STRATIFICATION AND CLASS FORMATION'],
-          tone: 'Objective',
-          quote: 'Urban industrial workers form the ideological core of the proletarian state.',
-          rationale: 'Industrial proletariat belongs to broader worker masses.'
-        }
-      ]
-    }
-  },
-  {
-    id: 'nep-art-2',
-    projectId: 'example-nep-1921',
-    source_name: 'Izvestia (1922)',
-    source_id: 'izvestia-1922',
-    headline: 'Rise of NEPmen and Small Traders in Urban Markets',
-    date: '1922-06-20',
-    url: 'https://archives.gov/nepmen-1922',
-    isProcessed: true,
-    actors: { main_actor: 'NEPmen', blame_target: 'Peasantry' },
-    frames: ['SOCIAL STRATIFICATION AND CLASS FORMATION', 'URBAN VS. RURAL DIVIDE'],
-    tone: 'Objective',
-    relation_type: 'Influences / Controls',
-    extractedData: {
-      relationships: [
-        {
-          date: '1922-06-20',
-          main_actor: 'NEPmen',
-          blame_target: 'Peasantry',
-          relation_type: 'Influences / Controls',
-          frames: ['URBAN VS. RURAL DIVIDE'],
-          tone: 'Objective',
-          quote: 'Private traders and NEPmen dominate grain procurement in rural markets.',
-          rationale: 'Market intermediaries grow in rural economies.'
-        },
-        {
-          date: '1922-06-20',
-          main_actor: 'NEPmen',
-          blame_target: 'State Capitalism',
-          relation_type: 'Belongs To',
-          frames: ['STATE CAPITALISM'],
-          tone: 'Objective',
-          quote: 'Private retail capital flourishes under the umbrella of regulated state capitalism.',
-          rationale: 'NEPmen represent the private sector under state capitalism.'
-        },
-        {
-          date: '1922-06-20',
-          main_actor: 'NEPmen',
-          blame_target: 'Party Bureaucracy',
-          relation_type: 'Funds / Finances',
-          frames: ['SOCIAL STRATIFICATION AND CLASS FORMATION'],
-          tone: 'Critical',
-          quote: 'Private traders pay tax duties and license fees directly to state revenue agencies.',
-          rationale: 'NEPmen commercial activity funds state administration.'
-        },
-        {
-          date: '1922-06-20',
-          main_actor: 'Peasantry',
-          blame_target: 'War Communism',
-          relation_type: 'Opposes / Blames',
-          frames: ['URBAN VS. RURAL DIVIDE'],
-          tone: 'Critical',
-          quote: 'Peasants welcome the end of forced requisitioning (prodrazverstka).',
-          rationale: 'Peasantry rejoices over the repeal of war communism.'
-        },
-        {
-          date: '1922-06-20',
-          main_actor: 'Peasantry',
-          blame_target: 'New Economic Policy',
-          relation_type: 'Supports / Allies',
-          frames: ['ECONOMIC RECOVERY VS. IDEOLOGICAL PURITY'],
-          tone: 'Sympathetic',
-          quote: 'Farmers respond enthusiastically to the fixed tax-in-kind system.',
-          rationale: 'Peasantry supports market-oriented reforms.'
-        },
-        {
-          date: '1922-06-20',
-          main_actor: 'Cheka / OGPU',
-          blame_target: 'NEPmen',
-          relation_type: 'Influences / Controls',
-          frames: ['STATE CAPITALISM'],
-          tone: 'Alarmed',
-          quote: 'State security organs monitor private merchants for illegal speculation.',
-          rationale: 'Soviet security oversees NEPmen commercial activities.'
-        }
-      ]
-    }
-  },
-  {
-    id: 'nep-art-3',
-    projectId: 'example-nep-1921',
-    source_name: 'Bolshevik Journal (1923)',
-    source_id: 'bolshevik-journal-1923',
-    headline: 'The Scissor Crisis & Industrial Price Inflation',
-    date: '1923-10-15',
-    url: 'https://archives.gov/scissors-1923',
-    isProcessed: true,
-    actors: { main_actor: 'Scissors Crisis', blame_target: 'Peasantry' },
-    frames: ['ECONOMIC RECOVERY VS. IDEOLOGICAL PURITY', 'URBAN VS. RURAL DIVIDE'],
-    tone: 'Alarmed',
-    relation_type: 'Opposes / Blames',
-    extractedData: {
-      relationships: [
-        {
-          date: '1923-10-15',
-          main_actor: 'Scissors Crisis',
-          blame_target: 'Peasantry',
-          relation_type: 'Opposes / Blames',
-          frames: ['URBAN VS. RURAL DIVIDE'],
-          tone: 'Alarmed',
-          quote: 'High industrial goods prices discourage peasants from selling surplus grain to cities.',
-          rationale: 'Economic gap between industrial and agricultural prices hurts rural farmers.'
-        },
-        {
-          date: '1923-10-15',
-          main_actor: 'Scissors Crisis',
-          blame_target: 'Industrial Proletariat',
-          relation_type: 'Opposes / Blames',
-          frames: ['ECONOMIC RECOVERY VS. IDEOLOGICAL PURITY'],
-          tone: 'Critical',
-          quote: 'High manufactured goods prices threaten factory employment and real worker wages.',
-          rationale: 'Price mismatch depresses urban living standards.'
-        },
-        {
-          date: '1923-10-15',
-          main_actor: 'Leon Trotsky',
-          blame_target: 'Scissors Crisis',
-          relation_type: 'Opposes / Blames',
-          frames: ['ECONOMIC RECOVERY VS. IDEOLOGICAL PURITY'],
-          tone: 'Alarmed',
-          quote: 'Trotsky demonstrates the widening price scissors at the 12th Party Congress.',
-          rationale: 'Trotsky demands rapid state intervention to close the price scissors.'
-        },
-        {
-          date: '1923-10-15',
-          main_actor: 'Leon Trotsky',
-          blame_target: 'Left Opposition',
-          relation_type: 'Belongs To',
-          frames: ['INTRA-PARTY FACTIONALISM'],
-          tone: 'Objective',
-          quote: 'Trotsky leads the Left Opposition platform advocating rapid industrialization.',
-          rationale: 'Trotsky is the principal leader of the Left Opposition.'
-        },
-        {
-          date: '1923-10-15',
-          main_actor: 'Left Opposition',
-          blame_target: 'Party Bureaucracy',
-          relation_type: 'Opposes / Blames',
-          frames: ['INTRA-PARTY FACTIONALISM'],
-          tone: 'Critical',
-          quote: 'The Declaration of the 46 denounces bureaucratic stagnation in party organs.',
-          rationale: 'Left Opposition attacks administrative bureaucracy.'
-        },
-        {
-          date: '1923-10-15',
-          main_actor: 'Left Opposition',
-          blame_target: 'Nikolai Bukharin',
-          relation_type: 'Opposes / Blames',
-          frames: ['INTRA-PARTY FACTIONALISM'],
-          tone: 'Critical',
-          quote: 'Preobrazhensky and Trotsky reject Bukharins slow agrarian pace.',
-          rationale: 'Left Opposition challenges Bukharin industrial policy.'
-        }
-      ]
-    }
-  },
-  {
-    id: 'nep-art-4',
-    projectId: 'example-nep-1921',
-    source_name: 'Pravda Special Issue (1924)',
-    source_id: 'pravda-special-1924',
-    headline: 'Death of Lenin & Factional Struggle for Succession',
-    date: '1924-01-25',
-    url: 'https://archives.gov/succession-1924',
-    isProcessed: true,
-    actors: { main_actor: 'Joseph Stalin', blame_target: 'Leon Trotsky' },
-    frames: ['INTRA-PARTY FACTIONALISM'],
-    tone: 'Critical',
-    relation_type: 'Opposes / Blames',
-    extractedData: {
-      relationships: [
-        {
-          date: '1924-01-25',
-          main_actor: 'Joseph Stalin',
-          blame_target: 'Party Bureaucracy',
-          relation_type: 'Belongs To',
-          frames: ['INTRA-PARTY FACTIONALISM'],
-          tone: 'Objective',
-          quote: 'General Secretary Stalin leverages party secretariats to consolidate administrative control.',
-          rationale: 'Stalin operates as leader of party apparatus.'
-        },
-        {
-          date: '1924-01-25',
-          main_actor: 'Joseph Stalin',
-          blame_target: 'Nikolai Bukharin',
-          relation_type: 'Supports / Allies',
-          frames: ['INTRA-PARTY FACTIONALISM'],
-          tone: 'Sympathetic',
-          quote: 'Stalin aligns with Bukharin to form the ruling duumvirate against Trotsky.',
-          rationale: 'Triumvirate/alliance formed between Stalin and Bukharin.'
-        },
-        {
-          date: '1924-01-25',
-          main_actor: 'Joseph Stalin',
-          blame_target: 'Leon Trotsky',
-          relation_type: 'Opposes / Blames',
-          frames: ['INTRA-PARTY FACTIONALISM'],
-          tone: 'Critical',
-          quote: 'Stalin launches anti-Trotsky campaign warning of Bonapartism.',
-          rationale: 'Stalin seeks to isolate Trotsky politically.'
-        },
-        {
-          date: '1924-01-25',
-          main_actor: 'Old Bolsheviks',
-          blame_target: 'Party Bureaucracy',
-          relation_type: 'Belongs To',
-          frames: ['INTRA-PARTY FACTIONALISM'],
-          tone: 'Objective',
-          quote: 'Veteran revoluntionaries from 1917 occupy senior positions in the Politburo.',
-          rationale: 'Old Bolsheviks constitute the party leadership.'
-        },
-        {
-          date: '1924-01-25',
-          main_actor: 'Leon Trotsky',
-          blame_target: 'Joseph Stalin',
-          relation_type: 'Opposes / Blames',
-          frames: ['INTRA-PARTY FACTIONALISM'],
-          tone: 'Critical',
-          quote: 'Trotsky publishes Lessons of October criticizing party apparatus maneuvering.',
-          rationale: 'Trotsky attacks Stalin secretarial hegemony.'
-        },
-        {
-          date: '1924-01-25',
-          main_actor: 'Nikolai Bukharin',
-          blame_target: 'New Economic Policy',
-          relation_type: 'Supports / Allies',
-          frames: ['ECONOMIC RECOVERY VS. IDEOLOGICAL PURITY'],
-          tone: 'Sympathetic',
-          quote: 'Bukharin theorizes that Soviet socialism can be reached through NEP market evolution.',
-          rationale: 'Bukharin provides economic theory supporting NEP.'
-        }
-      ]
-    }
-  },
-  {
-    id: 'nep-art-5',
-    projectId: 'example-nep-1921',
-    source_name: 'Krasnaya Gazeta (1925)',
-    source_id: 'krasnaya-gazeta-1925',
-    headline: 'Bukharin Agrarian Thesis: Enrich Yourselves',
-    date: '1925-04-17',
-    url: 'https://archives.gov/enrich-1925',
-    isProcessed: true,
-    actors: { main_actor: 'Nikolai Bukharin', blame_target: 'Peasantry' },
-    frames: ['SOCIAL STRATIFICATION AND CLASS FORMATION', 'URBAN VS. RURAL DIVIDE'],
-    tone: 'Sympathetic',
-    relation_type: 'Supports / Allies',
-    extractedData: {
-      relationships: [
-        {
-          date: '1925-04-17',
-          main_actor: 'Nikolai Bukharin',
-          blame_target: 'Peasantry',
-          relation_type: 'Supports / Allies',
-          frames: ['URBAN VS. RURAL DIVIDE'],
-          tone: 'Sympathetic',
-          quote: 'Our slogan to the peasantry must be: Enrich yourselves, grow your holdings.',
-          rationale: 'Bukharin advocates for peasant agricultural growth.'
-        },
-        {
-          date: '1925-04-17',
-          main_actor: 'Nikolai Bukharin',
-          blame_target: 'Kulaks',
-          relation_type: 'Supports / Allies',
-          frames: ['SOCIAL STRATIFICATION AND CLASS FORMATION'],
-          tone: 'Objective',
-          quote: 'Even prosperous peasants (kulaks) contribute to the national grain surplus.',
-          rationale: 'Bukharin defends rich peasant agricultural production.'
-        },
-        {
-          date: '1925-04-17',
-          main_actor: 'Nikolai Bukharin',
-          blame_target: 'Right Opposition',
-          relation_type: 'Belongs To',
-          frames: ['INTRA-PARTY FACTIONALISM'],
-          tone: 'Objective',
-          quote: 'Bukharin, Rykov, and Tomsky represent the moderate Right Opposition trend.',
-          rationale: 'Bukharin is ideologue of the Right Opposition.'
-        },
-        {
-          date: '1925-04-17',
-          main_actor: 'Kulaks',
-          blame_target: 'Peasantry',
-          relation_type: 'Belongs To',
-          frames: ['SOCIAL STRATIFICATION AND CLASS FORMATION'],
-          tone: 'Objective',
-          quote: 'Kulaks form the wealthy upper strata of rural agrarian society.',
-          rationale: 'Kulaks belong to the broader peasantry.'
-        },
-        {
-          date: '1925-04-17',
-          main_actor: 'Right Opposition',
-          blame_target: 'Left Opposition',
-          relation_type: 'Opposes / Blames',
-          frames: ['INTRA-PARTY FACTIONALISM'],
-          tone: 'Critical',
-          quote: 'Right wing theoreticians denounce super-industrializers as economic adventurists.',
-          rationale: 'Right Opposition opposes Left Opposition policies.'
-        },
-        {
-          date: '1925-04-17',
-          main_actor: 'Kulaks',
-          blame_target: 'NEPmen',
-          relation_type: 'Funds / Finances',
-          frames: ['SOCIAL STRATIFICATION AND CLASS FORMATION'],
-          tone: 'Objective',
-          quote: 'Kulak grain sales finance urban NEPmen commerce and private trading networks.',
-          rationale: 'Wealthy peasants trade with urban NEPmen.'
-        }
-      ]
-    }
-  },
-  {
-    id: 'nep-art-6',
-    projectId: 'example-nep-1921',
-    source_name: 'Soviet Economic Review (1926)',
-    source_id: 'soviet-economic-review-1926',
-    headline: 'Foreign Trade Monopoly and Concessions Strategy',
-    date: '1926-08-30',
-    url: 'https://archives.gov/trade-1926',
-    isProcessed: true,
-    actors: { main_actor: 'Foreign Concessionaires', blame_target: 'State Capitalism' },
-    frames: ['STATE CAPITALISM', 'ECONOMIC RECOVERY VS. IDEOLOGICAL PURITY'],
-    tone: 'Objective',
-    relation_type: 'Funds / Finances',
-    extractedData: {
-      relationships: [
-        {
-          date: '1926-08-30',
-          main_actor: 'Foreign Concessionaires',
-          blame_target: 'State Capitalism',
-          relation_type: 'Funds / Finances',
-          frames: ['STATE CAPITALISM'],
-          tone: 'Objective',
-          quote: 'Western capital investments and mining concessions provide crucial hard currency.',
-          rationale: 'Foreign firms finance Soviet state capital development.'
-        },
-        {
-          date: '1926-08-30',
-          main_actor: 'State Capitalism',
-          blame_target: 'New Economic Policy',
-          relation_type: 'Supports / Allies',
-          frames: ['STATE CAPITALISM'],
-          tone: 'Objective',
-          quote: 'Leninist state capitalism provides the legal structure governing NEP.',
-          rationale: 'State capitalism supports NEP framework.'
-        },
-        {
-          date: '1926-08-30',
-          main_actor: 'Foreign Concessionaires',
-          blame_target: 'Gosplan',
-          relation_type: 'Influences / Controls',
-          frames: ['STATE CAPITALISM'],
-          tone: 'Objective',
-          quote: 'State planning committees negotiate technology import contracts with foreign firms.',
-          rationale: 'Concessionaires interact with Gosplan state planners.'
-        },
-        {
-          date: '1926-08-30',
-          main_actor: 'Red Army',
-          blame_target: 'Party Bureaucracy',
-          relation_type: 'Supports / Allies',
-          frames: ['INTRA-PARTY FACTIONALISM'],
-          tone: 'Objective',
-          quote: 'Military leadership maintains loyalty to the ruling Party Central Committee.',
-          rationale: 'Red Army supports Party leadership.'
-        },
-        {
-          date: '1926-08-30',
-          main_actor: 'Socialist Revolutionaries',
-          blame_target: 'Vladimir Lenin',
-          relation_type: 'Opposes / Blames',
-          frames: ['INTRA-PARTY FACTIONALISM'],
-          tone: 'Critical',
-          quote: 'SR remnants condemn Bolshevik single-party monopoly.',
-          rationale: 'Socialist Revolutionaries oppose Lenin party dictatorship.'
-        }
-      ]
-    }
-  },
-  {
-    id: 'nep-art-7',
-    projectId: 'example-nep-1921',
-    source_name: 'Opposition Platform (1927)',
-    source_id: 'opposition-platform-1927',
-    headline: 'United Opposition Manifesto: Defense of Proletarian Dictatorship',
-    date: '1927-09-03',
-    url: 'https://archives.gov/platform-1927',
-    isProcessed: true,
-    actors: { main_actor: 'Left Opposition', blame_target: 'Kulaks' },
-    frames: ['INTRA-PARTY FACTIONALISM', 'SOCIAL STRATIFICATION AND CLASS FORMATION'],
-    tone: 'Alarmed',
-    relation_type: 'Opposes / Blames',
-    extractedData: {
-      relationships: [
-        {
-          date: '1927-09-03',
-          main_actor: 'Left Opposition',
-          blame_target: 'Kulaks',
-          relation_type: 'Opposes / Blames',
-          frames: ['SOCIAL STRATIFICATION AND CLASS FORMATION'],
-          tone: 'Alarmed',
-          quote: 'The kulak threat in the countryside endangers Soviet power and grain supplies.',
-          rationale: 'Left Opposition calls for class struggle against kulaks.'
-        },
-        {
-          date: '1927-09-03',
-          main_actor: 'Left Opposition',
-          blame_target: 'NEPmen',
-          relation_type: 'Opposes / Blames',
-          frames: ['SOCIAL STRATIFICATION AND CLASS FORMATION'],
-          tone: 'Alarmed',
-          quote: 'Bourgeois NEPmen are siphoning state industrial profits into private coffers.',
-          rationale: 'Left Opposition demands crackdown on private traders.'
-        },
-        {
-          date: '1927-09-03',
-          main_actor: 'Left Opposition',
-          blame_target: 'Industrial Proletariat',
-          relation_type: 'Incites / Mobilizes',
-          frames: ['SOCIAL STRATIFICATION AND CLASS FORMATION'],
-          tone: 'Sympathetic',
-          quote: 'Factory workers must mobilize against wage cuts and secretarial dictatorship.',
-          rationale: 'Left Opposition rallies industrial workers.'
-        },
-        {
-          date: '1927-09-03',
-          main_actor: 'Party Bureaucracy',
-          blame_target: 'Left Opposition',
-          relation_type: 'Opposes / Blames',
-          frames: ['INTRA-PARTY FACTIONALISM'],
-          tone: 'Critical',
-          quote: 'The Central Committee expels Trotsky and Zinoviev for factional breach.',
-          rationale: 'Party machinery purges opposition leaders.'
-        },
-        {
-          date: '1927-09-03',
-          main_actor: 'Party Bureaucracy',
-          blame_target: 'Cheka / OGPU',
-          relation_type: 'Influences / Controls',
-          frames: ['INTRA-PARTY FACTIONALISM'],
-          tone: 'Objective',
-          quote: 'Security apparatus arrests underground opposition printing presses.',
-          rationale: 'Party bureaucracy utilizes state security organs.'
-        }
-      ]
-    }
-  },
-  {
-    id: 'nep-art-8',
-    projectId: 'example-nep-1921',
-    source_name: 'Pravda Editorial (1928)',
-    source_id: 'pravda-editorial-1928',
-    headline: 'Stalin Abandons NEP and Launches First Five-Year Plan',
-    date: '1928-11-20',
-    url: 'https://archives.gov/stalin-1928',
-    isProcessed: true,
-    actors: { main_actor: 'Joseph Stalin', blame_target: 'New Economic Policy' },
-    frames: ['ECONOMIC RECOVERY VS. IDEOLOGICAL PURITY', 'STATE CAPITALISM'],
-    tone: 'Critical',
-    relation_type: 'Opposes / Blames',
-    extractedData: {
-      relationships: [
-        {
-          date: '1928-11-20',
-          main_actor: 'Joseph Stalin',
-          blame_target: 'New Economic Policy',
-          relation_type: 'Opposes / Blames',
-          frames: ['ECONOMIC RECOVERY VS. IDEOLOGICAL PURITY'],
-          tone: 'Critical',
-          quote: 'The grain procurement crisis proves NEP can no longer supply socialist industrialization.',
-          rationale: 'Stalin declares the end of NEP.'
-        },
-        {
-          date: '1928-11-20',
-          main_actor: 'Joseph Stalin',
-          blame_target: 'Nikolai Bukharin',
-          relation_type: 'Opposes / Blames',
-          frames: ['INTRA-PARTY FACTIONALISM'],
-          tone: 'Critical',
-          quote: 'Bukharins right-deviation represents capitalist restoration in agriculture.',
-          rationale: 'Stalin purges the Right Opposition.'
-        },
-        {
-          date: '1928-11-20',
-          main_actor: 'Joseph Stalin',
-          blame_target: 'Right Opposition',
-          relation_type: 'Opposes / Blames',
-          frames: ['INTRA-PARTY FACTIONALISM'],
-          tone: 'Critical',
-          quote: 'Right-wing conciliators are unmasked as defenders of kulak hoarding.',
-          rationale: 'Stalin breaks the moderate Right faction.'
-        },
-        {
-          date: '1928-11-20',
-          main_actor: 'Joseph Stalin',
-          blame_target: 'Gosplan',
-          relation_type: 'Influences / Controls',
-          frames: ['STATE CAPITALISM'],
-          tone: 'Objective',
-          quote: 'Stalin orders Gosplan to draft maximum targets for heavy industry.',
-          rationale: 'Stalin takes control of planning apparatus.'
-        },
-        {
-          date: '1928-11-20',
-          main_actor: 'Gosplan',
-          blame_target: 'Industrial Proletariat',
-          relation_type: 'Incites / Mobilizes',
-          frames: ['STATE CAPITALISM'],
-          tone: 'Objective',
-          quote: 'Five-Year Plan mobilizes millions of workers for tractor plant construction.',
-          rationale: 'Gosplan directs worker mobilization.'
-        },
-        {
-          date: '1928-11-20',
-          main_actor: 'New Economic Policy',
-          blame_target: 'Party Bureaucracy',
-          relation_type: 'Opposes / Blames',
-          frames: ['ECONOMIC RECOVERY VS. IDEOLOGICAL PURITY'],
-          tone: 'Critical',
-          quote: 'NEP market forces inevitably clash with central state administration goals.',
-          rationale: 'Structural contradiction between NEP and party administration.'
-        }
-      ]
-    }
-  }
+const RAW_RELATIONS = [
+  // Pravda Archives (1921)
+  { source_name: 'Pravda Archives (1921)', source_id: 'pravda-archives-1921', date: '1921-03-15', main: 'Vladimir Lenin', target: 'War Communism', rel: 'Opposes / Blames', frame: 'ECONOMIC RECOVERY VS. IDEOLOGICAL PURITY', tone: 'Critical', quote: 'War communism was imposed by war and ruin. It was not, nor could it be, a policy that corresponded to economic tasks.' },
+  { source_name: 'Pravda Archives (1921)', source_id: 'pravda-archives-1921', date: '1921-03-15', main: 'Vladimir Lenin', target: 'New Economic Policy', rel: 'Supports / Allies', frame: 'STATE CAPITALISM', tone: 'Objective', quote: 'We must allow a degree of free trade and private enterprise to restore agricultural output.' },
+  { source_name: 'Pravda Archives (1921)', source_id: 'pravda-archives-1921', date: '1921-03-15', main: 'Vladimir Lenin', target: 'Gosplan', rel: 'Influences / Controls', frame: 'STATE CAPITALISM', tone: 'Objective', quote: 'Gosplan must regulate market transactions while retaining command over heavy industry.' },
+  { source_name: 'Pravda Archives (1921)', source_id: 'pravda-archives-1921', date: '1921-03-15', main: 'Vladimir Lenin', target: 'Peasantry', rel: 'Negotiates / Compromises', frame: 'URBAN VS. RURAL DIVIDE', tone: 'Sympathetic', quote: 'The tax in kind is a compromise with the millions of small peasant proprietors.' },
+  { source_name: 'Pravda Archives (1921)', source_id: 'pravda-archives-1921', date: '1921-03-15', main: 'Workers Opposition', target: 'Vladimir Lenin', rel: 'Opposes / Blames', frame: 'ECONOMIC RECOVERY VS. IDEOLOGICAL PURITY', tone: 'Alarmed', quote: 'Reintroducing market mechanisms betrays the socialist goal of the revolution.' },
+  { source_name: 'Pravda Archives (1921)', source_id: 'pravda-archives-1921', date: '1921-03-15', main: 'Workers Opposition', target: 'Party Bureaucracy', rel: 'Belongs To', frame: 'INTRA-PARTY FACTIONALISM', tone: 'Critical', quote: 'Trade unions must manage industry directly rather than bureaucratic appointees.' },
+  { source_name: 'Pravda Archives (1921)', source_id: 'pravda-archives-1921', date: '1921-03-15', main: 'Industrial Proletariat', target: 'Worker Masses', rel: 'Belongs To', frame: 'SOCIAL STRATIFICATION AND CLASS FORMATION', tone: 'Objective', quote: 'Urban industrial workers form the ideological core of the proletarian state.' },
+  { source_name: 'Pravda Archives (1921)', source_id: 'pravda-archives-1921', date: '1921-03-15', main: 'War Communism', target: 'Industrial Proletariat', rel: 'Opposes / Blames', frame: 'ECONOMIC RECOVERY VS. IDEOLOGICAL PURITY', tone: 'Critical', quote: 'Forced requisitioning depleted urban food supplies and reduced factory labor force.' },
+
+  // Izvestia (1922)
+  { source_name: 'Izvestia (1922)', source_id: 'izvestia-1922', date: '1922-06-20', main: 'NEPmen', target: 'Peasantry', rel: 'Influences / Controls', frame: 'URBAN VS. RURAL DIVIDE', tone: 'Objective', quote: 'Private traders and NEPmen dominate grain procurement in rural markets.' },
+  { source_name: 'Izvestia (1922)', source_id: 'izvestia-1922', date: '1922-06-20', main: 'NEPmen', target: 'State Capitalism', rel: 'Belongs To', frame: 'STATE CAPITALISM', tone: 'Objective', quote: 'Private retail capital flourishes under the umbrella of regulated state capitalism.' },
+  { source_name: 'Izvestia (1922)', source_id: 'izvestia-1922', date: '1922-06-20', main: 'NEPmen', target: 'Party Bureaucracy', rel: 'Funds / Finances', frame: 'SOCIAL STRATIFICATION AND CLASS FORMATION', tone: 'Critical', quote: 'Private traders pay tax duties and license fees directly to state revenue agencies.' },
+  { source_name: 'Izvestia (1922)', source_id: 'izvestia-1922', date: '1922-06-20', main: 'Peasantry', target: 'War Communism', rel: 'Opposes / Blames', frame: 'URBAN VS. RURAL DIVIDE', tone: 'Critical', quote: 'Peasants welcome the end of forced requisitioning (prodrazverstka).' },
+  { source_name: 'Izvestia (1922)', source_id: 'izvestia-1922', date: '1922-06-20', main: 'Peasantry', target: 'New Economic Policy', rel: 'Supports / Allies', frame: 'ECONOMIC RECOVERY VS. IDEOLOGICAL PURITY', tone: 'Sympathetic', quote: 'Farmers respond enthusiastically to the fixed tax-in-kind system.' },
+  { source_name: 'Izvestia (1922)', source_id: 'izvestia-1922', date: '1922-06-20', main: 'Cheka / OGPU', target: 'NEPmen', rel: 'Influences / Controls', frame: 'STATE CAPITALISM', tone: 'Alarmed', quote: 'State security organs monitor private merchants for illegal speculation.' },
+  { source_name: 'Izvestia (1922)', source_id: 'izvestia-1922', date: '1922-06-20', main: 'Kulaks', target: 'Peasantry', rel: 'Belongs To', frame: 'SOCIAL STRATIFICATION AND CLASS FORMATION', tone: 'Objective', quote: 'Wealthier peasants expand grain holdings within village communes.' },
+
+  // Bolshevik Journal (1923)
+  { source_name: 'Bolshevik Journal (1923)', source_id: 'bolshevik-journal-1923', date: '1923-10-15', main: 'Scissors Crisis', target: 'Peasantry', rel: 'Opposes / Blames', frame: 'URBAN VS. RURAL DIVIDE', tone: 'Alarmed', quote: 'High industrial goods prices discourage peasants from selling surplus grain to cities.' },
+  { source_name: 'Bolshevik Journal (1923)', source_id: 'bolshevik-journal-1923', date: '1923-10-15', main: 'Scissors Crisis', target: 'Industrial Proletariat', rel: 'Opposes / Blames', frame: 'ECONOMIC RECOVERY VS. IDEOLOGICAL PURITY', tone: 'Critical', quote: 'High manufactured goods prices threaten factory employment and real worker wages.' },
+  { source_name: 'Bolshevik Journal (1923)', source_id: 'bolshevik-journal-1923', date: '1923-10-15', main: 'Leon Trotsky', target: 'Scissors Crisis', rel: 'Opposes / Blames', frame: 'ECONOMIC RECOVERY VS. IDEOLOGICAL PURITY', tone: 'Alarmed', quote: 'Trotsky demonstrates the widening price scissors at the 12th Party Congress.' },
+  { source_name: 'Bolshevik Journal (1923)', source_id: 'bolshevik-journal-1923', date: '1923-10-15', main: 'Leon Trotsky', target: 'Left Opposition', rel: 'Belongs To', frame: 'INTRA-PARTY FACTIONALISM', tone: 'Objective', quote: 'Trotsky leads the Left Opposition platform advocating rapid industrialization.' },
+  { source_name: 'Bolshevik Journal (1923)', source_id: 'bolshevik-journal-1923', date: '1923-10-15', main: 'Left Opposition', target: 'Party Bureaucracy', rel: 'Opposes / Blames', frame: 'INTRA-PARTY FACTIONALISM', tone: 'Critical', quote: 'The Declaration of the 46 denounces bureaucratic stagnation in party organs.' },
+  { source_name: 'Bolshevik Journal (1923)', source_id: 'bolshevik-journal-1923', date: '1923-10-15', main: 'Left Opposition', target: 'Nikolai Bukharin', rel: 'Opposes / Blames', frame: 'INTRA-PARTY FACTIONALISM', tone: 'Critical', quote: 'Preobrazhensky and Trotsky reject Bukharins slow agrarian pace.' },
+  { source_name: 'Bolshevik Journal (1923)', source_id: 'bolshevik-journal-1923', date: '1923-10-15', main: 'Left Opposition', target: 'Kulaks', rel: 'Opposes / Blames', frame: 'SOCIAL STRATIFICATION AND CLASS FORMATION', tone: 'Alarmed', quote: 'Left Opposition warns of dangerous kulak enrichment in rural Soviets.' },
+
+  // Pravda Special Issue (1924)
+  { source_name: 'Pravda Special Issue (1924)', source_id: 'pravda-special-1924', date: '1924-01-25', main: 'Joseph Stalin', target: 'Party Bureaucracy', rel: 'Belongs To', frame: 'INTRA-PARTY FACTIONALISM', tone: 'Objective', quote: 'General Secretary Stalin leverages party secretariats to consolidate administrative control.' },
+  { source_name: 'Pravda Special Issue (1924)', source_id: 'pravda-special-1924', date: '1924-01-25', main: 'Joseph Stalin', target: 'Nikolai Bukharin', rel: 'Supports / Allies', frame: 'INTRA-PARTY FACTIONALISM', tone: 'Sympathetic', quote: 'Stalin aligns with Bukharin to form the ruling duumvirate against Trotsky.' },
+  { source_name: 'Pravda Special Issue (1924)', source_id: 'pravda-special-1924', date: '1924-01-25', main: 'Joseph Stalin', target: 'Leon Trotsky', rel: 'Opposes / Blames', frame: 'INTRA-PARTY FACTIONALISM', tone: 'Critical', quote: 'Stalin launches anti-Trotsky campaign warning of Bonapartism.' },
+  { source_name: 'Pravda Special Issue (1924)', source_id: 'pravda-special-1924', date: '1924-01-25', main: 'Old Bolsheviks', target: 'Party Bureaucracy', rel: 'Belongs To', frame: 'INTRA-PARTY FACTIONALISM', tone: 'Objective', quote: 'Veteran revolutionaries from 1917 occupy senior positions in the Politburo.' },
+  { source_name: 'Pravda Special Issue (1924)', source_id: 'pravda-special-1924', date: '1924-01-25', main: 'Leon Trotsky', target: 'Joseph Stalin', rel: 'Opposes / Blames', frame: 'INTRA-PARTY FACTIONALISM', tone: 'Critical', quote: 'Trotsky publishes Lessons of October criticizing party apparatus maneuvering.' },
+  { source_name: 'Pravda Special Issue (1924)', source_id: 'pravda-special-1924', date: '1924-01-25', main: 'Nikolai Bukharin', target: 'New Economic Policy', rel: 'Supports / Allies', frame: 'ECONOMIC RECOVERY VS. IDEOLOGICAL PURITY', tone: 'Sympathetic', quote: 'Bukharin theorizes that Soviet socialism can be reached through NEP market evolution.' },
+  { source_name: 'Pravda Special Issue (1924)', source_id: 'pravda-special-1924', date: '1924-01-25', main: 'Joseph Stalin', target: 'New Economic Policy', rel: 'Supports / Allies', frame: 'STATE CAPITALISM', tone: 'Objective', quote: 'Stalin initially defends NEP stability during Lenin successor transition.' },
+
+  // Krasnaya Gazeta (1925)
+  { source_name: 'Krasnaya Gazeta (1925)', source_id: 'krasnaya-gazeta-1925', date: '1925-04-17', main: 'Nikolai Bukharin', target: 'Peasantry', rel: 'Supports / Allies', frame: 'URBAN VS. RURAL DIVIDE', tone: 'Sympathetic', quote: 'Our slogan to the peasantry must be: Enrich yourselves, grow your holdings.' },
+  { source_name: 'Krasnaya Gazeta (1925)', source_id: 'krasnaya-gazeta-1925', date: '1925-04-17', main: 'Nikolai Bukharin', target: 'Kulaks', rel: 'Supports / Allies', frame: 'SOCIAL STRATIFICATION AND CLASS FORMATION', tone: 'Objective', quote: 'Even prosperous peasants (kulaks) contribute to the national grain surplus.' },
+  { source_name: 'Krasnaya Gazeta (1925)', source_id: 'krasnaya-gazeta-1925', date: '1925-04-17', main: 'Nikolai Bukharin', target: 'Right Opposition', rel: 'Belongs To', frame: 'INTRA-PARTY FACTIONALISM', tone: 'Objective', quote: 'Bukharin, Rykov, and Tomsky represent the moderate Right Opposition trend.' },
+  { source_name: 'Krasnaya Gazeta (1925)', source_id: 'krasnaya-gazeta-1925', date: '1925-04-17', main: 'Right Opposition', target: 'Left Opposition', rel: 'Opposes / Blames', frame: 'INTRA-PARTY FACTIONALISM', tone: 'Critical', quote: 'Right wing theoreticians denounce super-industrializers as economic adventurists.' },
+  { source_name: 'Krasnaya Gazeta (1925)', source_id: 'krasnaya-gazeta-1925', date: '1925-04-17', main: 'Kulaks', target: 'NEPmen', rel: 'Funds / Finances', frame: 'SOCIAL STRATIFICATION AND CLASS FORMATION', tone: 'Objective', quote: 'Kulak grain sales finance urban NEPmen commerce and private trading networks.' },
+  { source_name: 'Krasnaya Gazeta (1925)', source_id: 'krasnaya-gazeta-1925', date: '1925-04-17', main: 'Right Opposition', target: 'New Economic Policy', rel: 'Supports / Allies', frame: 'ECONOMIC RECOVERY VS. IDEOLOGICAL PURITY', tone: 'Sympathetic', quote: 'The Right Opposition maintains NEP as the permanent path to socialist building.' },
+
+  // Soviet Economic Review (1926)
+  { source_name: 'Soviet Economic Review (1926)', source_id: 'soviet-economic-review-1926', date: '1926-08-30', main: 'Foreign Concessionaires', target: 'State Capitalism', rel: 'Funds / Finances', frame: 'STATE CAPITALISM', tone: 'Objective', quote: 'Western capital investments and mining concessions provide crucial hard currency.' },
+  { source_name: 'Soviet Economic Review (1926)', source_id: 'soviet-economic-review-1926', date: '1926-08-30', main: 'State Capitalism', target: 'New Economic Policy', rel: 'Supports / Allies', frame: 'STATE CAPITALISM', tone: 'Objective', quote: 'Leninist state capitalism provides the legal structure governing NEP.' },
+  { source_name: 'Soviet Economic Review (1926)', source_id: 'soviet-economic-review-1926', date: '1926-08-30', main: 'Foreign Concessionaires', target: 'Gosplan', rel: 'Influences / Controls', frame: 'STATE CAPITALISM', tone: 'Objective', quote: 'State planning committees negotiate technology import contracts with foreign firms.' },
+  { source_name: 'Soviet Economic Review (1926)', source_id: 'soviet-economic-review-1926', date: '1926-08-30', main: 'Red Army', target: 'Party Bureaucracy', rel: 'Supports / Allies', frame: 'INTRA-PARTY FACTIONALISM', tone: 'Objective', quote: 'Military leadership maintains loyalty to the ruling Party Central Committee.' },
+  { source_name: 'Soviet Economic Review (1926)', source_id: 'soviet-economic-review-1926', date: '1926-08-30', main: 'Socialist Revolutionaries', target: 'Vladimir Lenin', rel: 'Opposes / Blames', frame: 'INTRA-PARTY FACTIONALISM', tone: 'Critical', quote: 'SR remnants condemn Bolshevik single-party monopoly.' },
+
+  // Opposition Platform (1927)
+  { source_name: 'Opposition Platform (1927)', source_id: 'opposition-platform-1927', date: '1927-09-03', main: 'Left Opposition', target: 'NEPmen', rel: 'Opposes / Blames', frame: 'SOCIAL STRATIFICATION AND CLASS FORMATION', tone: 'Alarmed', quote: 'Bourgeois NEPmen are siphoning state industrial profits into private coffers.' },
+  { source_name: 'Opposition Platform (1927)', source_id: 'opposition-platform-1927', date: '1927-09-03', main: 'Left Opposition', target: 'Industrial Proletariat', rel: 'Incites / Mobilizes', frame: 'SOCIAL STRATIFICATION AND CLASS FORMATION', tone: 'Sympathetic', quote: 'Factory workers must mobilize against wage cuts and secretarial dictatorship.' },
+  { source_name: 'Opposition Platform (1927)', source_id: 'opposition-platform-1927', date: '1927-09-03', main: 'Party Bureaucracy', target: 'Left Opposition', rel: 'Opposes / Blames', frame: 'INTRA-PARTY FACTIONALISM', tone: 'Critical', quote: 'The Central Committee expels Trotsky and Zinoviev for factional breach.' },
+  { source_name: 'Opposition Platform (1927)', source_id: 'opposition-platform-1927', date: '1927-09-03', main: 'Party Bureaucracy', target: 'Cheka / OGPU', rel: 'Influences / Controls', frame: 'INTRA-PARTY FACTIONALISM', tone: 'Objective', quote: 'Security apparatus arrests underground opposition printing presses.' },
+
+  // Pravda Editorial (1928)
+  { source_name: 'Pravda Editorial (1928)', source_id: 'pravda-editorial-1928', date: '1928-11-20', main: 'Joseph Stalin', target: 'Nikolai Bukharin', rel: 'Opposes / Blames', frame: 'INTRA-PARTY FACTIONALISM', tone: 'Critical', quote: 'Bukharins right-deviation represents capitalist restoration in agriculture.' },
+  { source_name: 'Pravda Editorial (1928)', source_id: 'pravda-editorial-1928', date: '1928-11-20', main: 'Joseph Stalin', target: 'Right Opposition', rel: 'Opposes / Blames', frame: 'INTRA-PARTY FACTIONALISM', tone: 'Critical', quote: 'Right-wing conciliators are unmasked as defenders of kulak hoarding.' },
+  { source_name: 'Pravda Editorial (1928)', source_id: 'pravda-editorial-1928', date: '1928-11-20', main: 'Joseph Stalin', target: 'Gosplan', rel: 'Influences / Controls', frame: 'STATE CAPITALISM', tone: 'Objective', quote: 'Stalin orders Gosplan to draft maximum targets for heavy industry.' },
+  { source_name: 'Pravda Editorial (1928)', source_id: 'pravda-editorial-1928', date: '1928-11-20', main: 'Gosplan', target: 'Industrial Proletariat', rel: 'Incites / Mobilizes', frame: 'STATE CAPITALISM', tone: 'Objective', quote: 'Five-Year Plan mobilizes millions of workers for tractor plant construction.' },
+  { source_name: 'Pravda Editorial (1928)', source_id: 'pravda-editorial-1928', date: '1928-11-20', main: 'New Economic Policy', target: 'Party Bureaucracy', rel: 'Opposes / Blames', frame: 'ECONOMIC RECOVERY VS. IDEOLOGICAL PURITY', tone: 'Critical', quote: 'NEP market forces inevitably clash with central state administration goals.' }
 ];
+
+const EXAMPLE_ARTICLES = RAW_RELATIONS.map((r, i) => ({
+  id: `nep-art-${i + 1}`,
+  projectId: 'example-nep-1921',
+  source_name: r.source_name,
+  source_id: r.source_id,
+  headline: `"${r.quote.substring(0, 65)}..."`,
+  date: r.date,
+  url: `https://archives.gov/${r.source_id}`,
+  isProcessed: true,
+  actors: { main_actor: r.main, blame_target: r.target },
+  frames: [r.frame],
+  tone: r.tone,
+  relation_type: r.rel,
+  quote: r.quote,
+  rationale: `${r.main} -> ${r.rel} -> ${r.target}`
+}));
 
 export const useStore = create(
   persist(
@@ -666,7 +143,7 @@ export const useStore = create(
         activeProjectId: state.activeProjectId === id ? null : state.activeProjectId
       })),
 
-      // Articles - pre-seeded with full EXAMPLE_ARTICLES dataset
+      // Articles - pre-seeded with full 49 EXAMPLE_ARTICLES dataset
       articles: EXAMPLE_ARTICLES, 
       
       addArticle: (articleData) => set((state) => ({
@@ -697,7 +174,7 @@ export const useStore = create(
           );
         }
         
-        // Ensure example project has all historical articles if missing or incomplete
+        // Ensure example project has all 49 historical articles
         const exampleArticlesCount = updatedArticles.filter(a => a.projectId === EXAMPLE_PROJECT.id).length;
         if (exampleArticlesCount < EXAMPLE_ARTICLES.length) {
           const otherArticles = updatedArticles.filter(a => a.projectId !== EXAMPLE_PROJECT.id);

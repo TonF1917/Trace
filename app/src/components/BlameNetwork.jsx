@@ -423,14 +423,27 @@ export function BlameNetwork({ allArticles, filteredArticles, sources, hoveredAr
 
   useEffect(() => {
     if (graphData.nodes.length > 0 && dimensions.width > 0 && dimensions.height > 0 && fgRef.current) {
-      fgRef.current.d3Force('charge', forceCollide ? null : undefined);
-      fgRef.current.d3Force('charge').strength(-1500); 
-      fgRef.current.d3Force('link').distance(200);
-      fgRef.current.d3Force('x', forceX(0).strength(0.015));
-      fgRef.current.d3Force('y', forceY(0).strength(0.015));
-      fgRef.current.d3Force('collide', forceCollide().radius(n => (n.academicRadius || 10) * (exportSettings?.nodeScale || 1) + 45).strength(1.0).iterations(8));
-      
-      fgRef.current.d3ReheatSimulation();
+      try {
+        const chargeForce = fgRef.current.d3Force('charge');
+        if (chargeForce && typeof chargeForce.strength === 'function') {
+          chargeForce.strength(-1500);
+        }
+
+        const linkForce = fgRef.current.d3Force('link');
+        if (linkForce && typeof linkForce.distance === 'function') {
+          linkForce.distance(200);
+        }
+
+        fgRef.current.d3Force('x', forceX(0).strength(0.015));
+        fgRef.current.d3Force('y', forceY(0).strength(0.015));
+        fgRef.current.d3Force('collide', forceCollide().radius(n => (n.academicRadius || 10) * (exportSettings?.nodeScale || 1) + 45).strength(1.0).iterations(8));
+        
+        if (typeof fgRef.current.d3ReheatSimulation === 'function') {
+          fgRef.current.d3ReheatSimulation();
+        }
+      } catch (err) {
+        console.error('Error setting d3 forces:', err);
+      }
     }
   }, [graphData.nodes.length, dimensions.width, dimensions.height, exportSettings]);
 

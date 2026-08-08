@@ -426,17 +426,17 @@ export function BlameNetwork({ allArticles, filteredArticles, sources, hoveredAr
       try {
         const chargeForce = fgRef.current.d3Force('charge');
         if (chargeForce && typeof chargeForce.strength === 'function') {
-          chargeForce.strength(-1500);
+          chargeForce.strength(-600);
         }
 
         const linkForce = fgRef.current.d3Force('link');
         if (linkForce && typeof linkForce.distance === 'function') {
-          linkForce.distance(200);
+          linkForce.distance(110);
         }
 
-        fgRef.current.d3Force('x', forceX(0).strength(0.015));
-        fgRef.current.d3Force('y', forceY(0).strength(0.015));
-        fgRef.current.d3Force('collide', forceCollide().radius(n => (n.academicRadius || 10) * (exportSettings?.nodeScale || 1) + 45).strength(1.0).iterations(8));
+        fgRef.current.d3Force('x', forceX(0).strength(0.06));
+        fgRef.current.d3Force('y', forceY(0).strength(0.06));
+        fgRef.current.d3Force('collide', forceCollide().radius(n => (n.academicRadius || 10) * (exportSettings?.nodeScale || 1) + 22).strength(1.0).iterations(5));
         
         if (typeof fgRef.current.d3ReheatSimulation === 'function') {
           fgRef.current.d3ReheatSimulation();
@@ -449,7 +449,7 @@ export function BlameNetwork({ allArticles, filteredArticles, sources, hoveredAr
 
   const handleEngineStop = useCallback(() => {
     if (!hasFit.current && fgRef.current) {
-      fgRef.current.zoomToFit(800, 50);
+      fgRef.current.zoomToFit(600, 80);
       hasFit.current = true;
     }
   }, []);

@@ -10,10 +10,11 @@ export function Settings() {
   const { apiConfig, setApiConfig } = useStore();
   
   const [formData, setFormData] = useState({
-    provider: apiConfig.provider || 'openai',
-    baseUrl: apiConfig.baseUrl || 'https://api.openai.com/v1/chat/completions',
-    apiKey: apiConfig.apiKey || '',
-    model: apiConfig.model || 'gpt-4o-mini'
+    provider: apiConfig.provider || 'freellmapi',
+    baseUrl: apiConfig.baseUrl || 'http://localhost:8000/v1/chat/completions',
+    apiKey: apiConfig.apiKey || 'freellmapi-96146ee70cfe916f131303a9dee491c45f5c979f6e9fe93c',
+    model: apiConfig.model || 'auto',
+    customSystemPrompt: apiConfig.customSystemPrompt || ''
   });
 
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -49,6 +50,13 @@ export function Settings() {
 
   const getProviderDefaults = (provider) => {
     switch(provider) {
+      case 'freellmapi':
+        return {
+          url: 'http://localhost:8000/v1/chat/completions',
+          model: 'auto',
+          apiKey: 'freellmapi-96146ee70cfe916f131303a9dee491c45f5c979f6e9fe93c',
+          desc: t('FreeLLMAPI (Default) - Unified key pre-configured. Pools free providers (Cohere, Gemini, GitHub, Mistral, Zhipu, etc.). You can switch API provider, key, or base URL at any time.')
+        };
       case 'lmstudio':
         return {
           url: 'http://localhost:1234/v1/chat/completions',
@@ -122,6 +130,7 @@ export function Settings() {
   };
 
   const providersList = [
+    { id: 'freellmapi', name: t('FreeLLMAPI (Default API)'), icon: Key },
     { id: 'openai', name: t('OpenAI & Compatible (Standard)'), icon: Bot },
     { id: 'lmstudio', name: t('LM Studio (Local)'), icon: Cpu },
     { id: 'ollama', name: t('Ollama (Local)'), icon: Database },
@@ -277,6 +286,20 @@ export function Settings() {
               <p className="text-xs text-slate-500 mt-1">
                 {t("If using overseas APIs (like OpenAI) in China, the built-in proxy needs your VPN's local HTTP proxy address to bypass the Great Firewall.")}
               </p>
+            </div>
+
+            <div className="space-y-2 pt-2">
+              <label className="flex items-center gap-2 text-sm font-bold text-slate-700">
+                <Brain className="w-4 h-4 text-rose-500" />
+                {t('Custom System Prompt')} <span className="text-slate-400 font-normal ml-1">{t('(Optional)')}</span>
+              </label>
+              <textarea 
+                rows={4}
+                value={formData.customSystemPrompt || ''}
+                onChange={e => setFormData({...formData, customSystemPrompt: e.target.value})}
+                className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-rose-500 focus:outline-none font-mono text-xs text-slate-700 leading-relaxed"
+                placeholder="Leave blank to use default system prompt for extraction & AI report..."
+              />
             </div>
 
             <div className="pt-4 mt-6 border-t border-slate-100 flex items-center justify-between">

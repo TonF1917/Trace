@@ -9,7 +9,7 @@ import { useTranslation } from 'react-i18next';
 export function Dashboard() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
-  const { projects, createProject, deleteProject, setActiveProject, apiConfig, initializeFromDatabase } = useStore();
+  const { projects, createProject, deleteProject, setActiveProject, apiConfig, initializeFromDatabase, loadExampleProject } = useStore();
   
   // Creation States
   const [isCreating, setIsCreating] = useState(false);
@@ -201,10 +201,12 @@ export function Dashboard() {
             </select>
             <button 
               onClick={() => navigate('/settings')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-colors ${!apiConfig.apiKey && apiConfig.provider !== 'lmstudio' && apiConfig.provider !== 'ollama' ? 'bg-red-100 text-red-700 hover:bg-red-200' : 'bg-slate-200 text-slate-700 hover:bg-slate-300'}`}
+              className="flex items-center gap-2 px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-bold text-sm transition-colors"
+              title={t('Default: FreeLLMAPI (Swappable/Configurable)')}
             >
-              <SettingsIcon className="w-4 h-4" />
-              {(!apiConfig.apiKey && apiConfig.provider !== 'lmstudio' && apiConfig.provider !== 'ollama') ? t('API Key Required') : 'API Settings'}
+              <SettingsIcon className="w-4 h-4 text-rose-600" />
+              <span>{apiConfig.provider === 'freellmapi' || !apiConfig.provider ? 'FreeLLMAPI (' + t('Default') + ')' : apiConfig.provider}</span>
+              <span className="text-[10px] bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded uppercase font-bold">{t('Change API')}</span>
             </button>
           </div>
         </div>
@@ -445,13 +447,23 @@ export function Dashboard() {
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-xl font-bold text-slate-800">{t('Your Projects')}</h2>
           {!isCreating && (
-            <button 
-              onClick={() => setIsCreating(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white text-sm font-bold rounded-lg hover:bg-slate-800 shadow-sm transition-transform active:scale-95"
-            >
-              <Plus className="w-4 h-4" />
-              {t('New Project')}
-            </button>
+            <div className="flex items-center gap-3">
+              <button 
+                onClick={loadExampleProject}
+                className="flex items-center gap-1.5 px-3.5 py-2 bg-purple-100 text-purple-700 hover:bg-purple-200 text-sm font-bold rounded-lg transition-colors"
+                title={t('Restore pre-configured NEP 1921 example project')}
+              >
+                <Sparkles className="w-4 h-4" />
+                {t('Restore Example Project')}
+              </button>
+              <button 
+                onClick={() => setIsCreating(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white text-sm font-bold rounded-lg hover:bg-slate-800 shadow-sm transition-transform active:scale-95"
+              >
+                <Plus className="w-4 h-4" />
+                {t('New Project')}
+              </button>
+            </div>
           )}
         </div>
 

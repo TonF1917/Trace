@@ -1,14 +1,55 @@
 import { useStore } from '../store';
 
+/**
+ * Robust JSON extraction and cleaning helper.
+ * Handles markdown backticks, embedded JSON blocks, trailing commas, and unescaped characters.
+ */
+export function cleanAndParseJson(text) {
+  if (typeof text !== 'string') return text;
+  let cleaned = text.trim();
+
+  // Extract content from ```json ... ``` or ``` ... ``` codeblock if present
+  const codeBlockMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  if (codeBlockMatch && codeBlockMatch[1]) {
+    cleaned = codeBlockMatch[1].trim();
+  }
+
+  // Extract starting from first { or [ to last } or ]
+  const firstBrace = cleaned.search(/[\{\[]/);
+  const lastBrace = Math.max(cleaned.lastIndexOf('}'), cleaned.lastIndexOf(']'));
+
+  if (firstBrace !== -1 && lastBrace > firstBrace) {
+    cleaned = cleaned.substring(firstBrace, lastBrace + 1);
+  }
+
+  // Remove trailing commas before } or ]
+  cleaned = cleaned.replace(/,\s*([\}\]])/g, '$1');
+
+  try {
+    return JSON.parse(cleaned);
+  } catch (err) {
+    try {
+      // Fix unescaped newlines within string values
+      const fixedNewlines = cleaned.replace(/([^\\])\n/g, '$1\\n');
+      return JSON.parse(fixedNewlines);
+    } catch (e2) {
+      console.error('JSON parsing failed:', cleaned, err);
+      throw new Error(`Failed to parse LLM JSON output. Raw snippet: ${cleaned.slice(0, 120)}...`);
+    }
+  }
+}
+
 async function callLLM(systemPrompt, userPrompt, temperature = 0.1, expectJson = true) {
   const { apiConfig } = useStore.getState();
   
-  if (!apiConfig.apiKey && !['lmstudio', 'ollama'].includes(apiConfig.provider)) {
+  const currentApiKey = apiConfig.apiKey || (apiConfig.provider === 'freellmapi' ? 'freellmapi-96146ee70cfe916f131303a9dee491c45f5c979f6e9fe93c' : '');
+  
+  if (!currentApiKey && !['lmstudio', 'ollama'].includes(apiConfig.provider)) {
     throw new Error('API Key is missing. Please configure it in Settings.');
   }
 
   let url, headers, body;
-  const provider = apiConfig.provider || 'openai';
+  const provider = apiConfig.provider || 'freellmapi';
 
   if (provider === 'lmstudio') {
     url = apiConfig.baseUrl || 'http://localhost:1234/v1/chat/completions';
@@ -27,7 +68,7 @@ async function callLLM(systemPrompt, userPrompt, temperature = 0.1, expectJson =
     url = apiConfig.baseUrl || 'https://api.anthropic.com/v1/messages';
     headers = {
       'Content-Type': 'application/json',
-      'x-api-key': apiConfig.apiKey,
+      'x-api-key': currentApiKey,
       'anthropic-version': '2023-06-01',
       'anthropic-dangerously-allow-browser': 'true'
     };
@@ -43,8 +84,8 @@ async function callLLM(systemPrompt, userPrompt, temperature = 0.1, expectJson =
     const model = apiConfig.model || 'gemini-1.5-pro';
     const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
     url = cleanBaseUrl.includes(':generateContent') 
-      ? `${cleanBaseUrl}?key=${apiConfig.apiKey}` 
-      : `${cleanBaseUrl}/${model}:generateContent?key=${apiConfig.apiKey}`;
+      ? `${cleanBaseUrl}?key=${currentApiKey}` 
+      : `${cleanBaseUrl}/${model}:generateContent?key=${currentApiKey}`;
       
     headers = { 'Content-Type': 'application/json' };
     body = JSON.stringify({
@@ -58,8 +99,9 @@ async function callLLM(systemPrompt, userPrompt, temperature = 0.1, expectJson =
       }
     });
   } else {
-    // Default to OpenAI & Compatible
-    let cleanUrl = (apiConfig.baseUrl || 'https://api.openai.com/v1/chat/completions').trim();
+    // FreeLLMAPI or OpenAI & Compatible
+    const defaultUrl = provider === 'freellmapi' ? 'http://localhost:8000/v1/chat/completions' : 'https://api.openai.com/v1/chat/completions';
+    let cleanUrl = (apiConfig.baseUrl || defaultUrl).trim();
     // Auto-append /chat/completions if the user only provided the Base URL
     if (!cleanUrl.includes('/chat/completions') && !cleanUrl.includes('/completions') && !cleanUrl.includes('/api/chat')) {
       cleanUrl = cleanUrl.replace(/\/$/, '') + '/chat/completions';
@@ -68,7 +110,7 @@ async function callLLM(systemPrompt, userPrompt, temperature = 0.1, expectJson =
     
     headers = {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiConfig.apiKey}`
+      'Authorization': `Bearer ${currentApiKey}`
     };
     const requestBody = {
       messages: [
@@ -190,10 +232,9 @@ async function callLLM(systemPrompt, userPrompt, temperature = 0.1, expectJson =
     
     if (!expectJson) return jsonString.trim();
     
-    // Clean up potential markdown wrapper
-    jsonString = jsonString.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim();
-    return JSON.parse(jsonString);
+    return cleanAndParseJson(jsonString);
   } catch (e) {
+    if (e.message.includes('Failed to parse LLM JSON output')) throw e;
     throw new Error('Failed to parse LLM response. If expecting JSON, ensure the model supports JSON output.');
   }
 }
@@ -425,3 +466,65 @@ Return ONLY a valid JSON object with the following structure:
   
   return combinedSummary;
 }
+
+/**
+ * Generates a comprehensive analytical briefing report in Markdown based on graph topology.
+ */
+export async function generateTopologyReport(project, metrics) {
+  const customSystemPrompt = useStore.getState().apiConfig.customSystemPrompt;
+  
+  const systemPrompt = customSystemPrompt || `You are a world-class academic political scientist and computational media analyst.
+Your task is to produce a comprehensive, publication-grade analytical briefing report (in Markdown format) based on the topological graph metrics of a media framing and blame network.
+
+Report Structure to follow:
+# 📊 ${project.name} - 拓扑网络深度分析与叙事归因报告
+
+## 1. 网络全局特征与张力概览 (Network Overview)
+- 简述网络规模（节点数 ${metrics.numNodes}、关系数 ${metrics.numLinks}、网络密度 ${metrics.density} 及社群数量 ${metrics.communityCount}）。
+- 阐述该话题的核心对抗焦点与叙事张力。
+
+## 2. 关键节点与权力中心分析 (Key Power Centers & Targets)
+- **主要归因/指责焦点 (Top Targets - High In-Degree)**: 谁是被集中的批判或归因对象？
+- **主要叙事发起方 (Top Accusers - High Out-Degree)**: 谁在主导议题和推动指责？
+- **跨阵营枢纽/桥梁角色 (Key Bridges - High Betweenness Centrality)**: 哪些实体连接了不同的叙事群体？
+
+## 3. 社群阵营与叙事分化 (Louvain Community Clusters)
+- 逐一剖析每个主要社群的核心成员与主要关系框架。
+
+## 4. 学术研判与策略结论 (Academic Insights & Takeaways)
+- 提炼该舆情/事件中的核心叙事陷阱或舆论裂隙。
+
+规则：
+1. 必须使用标准 Markdown 格式输出。
+2. 语言必须严谨、客观且具备学术深度。
+3. 请依据传入的网络指标数据进行深度推演。`;
+
+  const topHubsStr = metrics.topHubs.map(h => `${h.name} (Degree: ${h.degree}, In: ${h.inDegree}, Out: ${h.outDegree})`).join('; ');
+  const topBridgesStr = metrics.topBridges.map(b => `${b.name} (Betweenness: ${b.betweenness})`).join('; ');
+  const topTargetsStr = metrics.topTargets.map(t => `${t.name} (In-Degree: ${t.inDegree})`).join('; ');
+  const communitiesStr = metrics.communities.map(c => `[Community ${c.id + 1} (${c.members.length} members)]: ${c.members.join(', ')}`).join('\n');
+
+  const userPrompt = `Project Context:
+Project Name: ${project.name}
+Description: ${project.description || 'N/A'}
+
+Graph Metrics:
+- Total Nodes: ${metrics.numNodes}
+- Total Edges: ${metrics.numLinks}
+- Network Density: ${metrics.density}
+- Avg Degree: ${metrics.avgDegree}
+- Community Count: ${metrics.communityCount}
+
+Key Node Rankings:
+- Top Overall Hubs: ${topHubsStr}
+- Top Bridge Actors (Betweenness): ${topBridgesStr}
+- Top Blame Targets (In-Degree): ${topTargetsStr}
+
+Community Clusters (Louvain):
+${communitiesStr}
+
+Please generate the complete Markdown analysis report.`;
+
+  return callLLM(systemPrompt, userPrompt, 0.4, false);
+}
+

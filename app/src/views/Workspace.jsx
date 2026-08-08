@@ -6,6 +6,7 @@ import { BlameNetwork, DEFAULT_RELATION_COLORS, normalizeRelation } from '../com
 import { TimelineView } from '../components/TimelineView';
 import { MethodModal } from '../components/MethodModal';
 import { ViewControls } from '../components/ViewControls';
+import { GraphAnalyticsView } from './GraphAnalyticsView';
 import { analyzeArticle, extractMoreRelationships, generateTextForTopic, connectExistingEntities, consolidateEntities } from '../services/LLMService';
 import Papa from 'papaparse';
 import { toPng, toJpeg } from 'html-to-image';
@@ -971,13 +972,19 @@ export function Workspace() {
                 onClick={() => setActiveView('topology')}
                 className={`px-4 py-1.5 text-sm font-bold rounded-md transition-colors ${activeView === 'topology' ? 'bg-white shadow-sm text-rose-600' : 'text-slate-500 hover:text-slate-700'}`}
               >
-                {t('Topology')}
+                {t('Topology Network')}
+              </button>
+              <button 
+                onClick={() => setActiveView('analytics')}
+                className={`px-4 py-1.5 text-sm font-bold rounded-md transition-colors ${activeView === 'analytics' ? 'bg-white shadow-sm text-rose-600' : 'text-slate-500 hover:text-slate-700'}`}
+              >
+                {t('Graph Analytics')}
               </button>
               <button 
                 onClick={() => setActiveView('timeline')}
                 className={`px-4 py-1.5 text-sm font-bold rounded-md transition-colors ${activeView === 'timeline' ? 'bg-white shadow-sm text-rose-600' : 'text-slate-500 hover:text-slate-700'}`}
               >
-                {t('Timeline')}
+                {t('Timeline Matrix')}
               </button>
             </div>
             {activeView === 'topology' && (
@@ -1098,6 +1105,8 @@ export function Workspace() {
                   </div>
                 </div>
                 </>
+              ) : activeView === 'analytics' ? (
+                <GraphAnalyticsView project={project} articles={projectArticles} />
               ) : (
                 <TimelineView 
                   articles={filteredProcessedArticles} 

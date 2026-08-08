@@ -31,12 +31,13 @@ const EXAMPLE_PROJECT = {
 export const useStore = create(
   persist(
     (set, get) => ({
-      // API Settings
+      // API Settings - Default to FreeLLMAPI
       apiConfig: {
-        provider: 'openai',
-        baseUrl: 'https://api.openai.com/v1/chat/completions',
-        apiKey: '',
-        model: 'gpt-4o-mini'
+        provider: 'freellmapi',
+        baseUrl: 'http://localhost:8000/v1/chat/completions',
+        apiKey: 'freellmapi-96146ee70cfe916f131303a9dee491c45f5c979f6e9fe93c',
+        model: 'auto',
+        customSystemPrompt: ''
       },
       setApiConfig: (config) => set({ apiConfig: { ...get().apiConfig, ...config } }),
 
@@ -76,11 +77,11 @@ export const useStore = create(
       initializeFromDatabase: () => set((state) => {
         let updatedProjects = state.projects || [];
         
-        // If somehow projects are completely empty (e.g. wiped), ensure the example project is there
-        if (updatedProjects.length === 0) {
-          updatedProjects = [EXAMPLE_PROJECT];
+        // Ensure the original example project (New Economic Policy) is always present
+        const hasExample = updatedProjects.some(p => p.id === EXAMPLE_PROJECT.id || p.name === 'New Economic Policy (1921-1928)');
+        if (!hasExample) {
+          updatedProjects = [EXAMPLE_PROJECT, ...updatedProjects];
         } else {
-          // Retroactively flag the user's existing NEP project as an example
           updatedProjects = updatedProjects.map(p => 
             (p.name === 'New Economic Policy (1921-1928)' && !p.isExample) 
               ? { ...p, isExample: true } 
@@ -92,7 +93,8 @@ export const useStore = create(
       }),
       
       loadExampleProject: () => set((state) => {
-        if (!state.projects.find(p => p.id === EXAMPLE_PROJECT.id)) {
+        const hasExample = state.projects.some(p => p.id === EXAMPLE_PROJECT.id || p.name === 'New Economic Policy (1921-1928)');
+        if (!hasExample) {
           return { projects: [EXAMPLE_PROJECT, ...state.projects] };
         }
         return state;

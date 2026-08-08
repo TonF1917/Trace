@@ -1,6 +1,7 @@
 import React, { useMemo, useRef, useEffect, useState, useCallback } from 'react';
 import ForceGraph2D from 'react-force-graph-2d';
 import { forceX, forceY, forceCollide } from 'd3-force';
+import { detectCommunitiesLouvain, COMMUNITY_COLORS } from '../utils/graphAnalytics';
 
 export const DEFAULT_RELATION_COLORS = {
   'Opposes / Blames': '#b2182b',     // Deep Red
@@ -276,9 +277,18 @@ export function BlameNetwork({ allArticles, filteredArticles, sources, hoveredAr
       }
     });
 
+    // Louvain Community Detection
+    const { communityMap, communities } = detectCommunitiesLouvain(finalNodes, finalLinks);
+    finalNodes.forEach(n => {
+      const cId = communityMap.get(n.id) ?? 0;
+      n.communityId = cId;
+      n.communityColor = COMMUNITY_COLORS[cId % COMMUNITY_COLORS.length];
+    });
+
     return {
       nodes: finalNodes,
-      links: finalLinks
+      links: finalLinks,
+      communities
     };
   }, [allArticles, filteredArticles, sources, showSourceNodes, hiddenRelations, exportSettings.minFreq]);
 
@@ -312,11 +322,26 @@ export function BlameNetwork({ allArticles, filteredArticles, sources, hoveredAr
 
     parentMap.forEach((_, parentId) => {
       const allDescendants = getAllDescendants(parentId);
-      if (allDescendants.size > 0) groups.push({ parentId, childrenIds: allDescendants });
+      if (allDescendants.size > 0) groups.push({ parentId, childrenIds: allDescendants, color: null });
     });
+
+    // Fallback/Supplement: If no Belongs To hierarchy exists, group by Louvain communities!
+    if (groups.length === 0 && graphData.communities) {
+      graphData.communities.forEach(comm => {
+        if (comm.members.length >= 2) {
+          const [first, ...rest] = comm.members;
+          groups.push({
+            parentId: first,
+            childrenIds: new Set(rest),
+            color: comm.color
+          });
+        }
+      });
+    }
+
     groups.sort((a, b) => b.childrenIds.size - a.childrenIds.size);
     return groups;
-  }, [graphData.links, showGroupEnclosures]);
+  }, [graphData.links, graphData.communities, showGroupEnclosures]);
 
   const drawEnclosures = useCallback((ctx, globalScale) => {
     if (!showGroupEnclosures) return;

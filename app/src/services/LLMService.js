@@ -145,10 +145,10 @@ async function callLLM(systemPrompt, userPrompt, temperature = 0.1, expectJson =
 
   let response;
 
-  // Local endpoints (/api/* or localhost:8046) should be fetched directly without passing through /proxy
-  const isLocalEndpoint = finalUrl.startsWith('/api/') || finalUrl.includes('localhost:8046') || finalUrl.includes('127.0.0.1:8046');
+  // Direct endpoints (Trace built-in pool, Tailscale Funnel, /api/*, or localhost:8046) have CORS enabled and should be fetched directly
+  const isDirectEndpoint = provider === 'trace-pool' || finalUrl.includes('ts.net') || finalUrl.startsWith('/api/') || finalUrl.includes('localhost:8046') || finalUrl.includes('127.0.0.1:8046');
 
-  if (isLocalEndpoint) {
+  if (isDirectEndpoint) {
     try {
       response = await fetch(finalUrl, {
         method: 'POST',
@@ -156,7 +156,7 @@ async function callLLM(systemPrompt, userPrompt, temperature = 0.1, expectJson =
         body
       });
     } catch (networkError) {
-      throw new Error(`Local Relay Connection Error: Failed to reach ${finalUrl}. Make sure Vite dev server or trace_relay (port 8046) is running. [Details: ${networkError.message}]`);
+      throw new Error(`Trace Pool Connection Error: Failed to reach ${finalUrl}. [Details: ${networkError.message}]`);
     }
   } else {
     // Try using the built-in local CORS proxy first (runs as a Vite plugin during dev)

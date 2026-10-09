@@ -30,10 +30,13 @@ export function Settings() {
     try {
       let res;
       try {
-        res = await fetch('/api/trace-relay/quota');
+        res = await fetch('https://tonf.tailaefd2d.ts.net:8443/quota');
       } catch {
-        // Fallback to standalone port 8046 if Vite dev middleware is unreachable
-        res = await fetch('http://localhost:8046/quota');
+        try {
+          res = await fetch('/api/trace-relay/quota');
+        } catch {
+          res = await fetch('http://localhost:8046/quota');
+        }
       }
       if (res && res.ok) {
         const data = await res.json();
@@ -85,7 +88,7 @@ export function Settings() {
     switch(provider) {
       case 'trace-pool':
         return {
-          url: '/api/trace-relay/v1/chat/completions',
+          url: 'https://tonf.tailaefd2d.ts.net:8443/v1/chat/completions',
           model: 'gemini-3.8-flash-high',
           apiKey: 'trace-built-in-20m',
           desc: t('Trace Built-in Pool (Gemini 3.8 Flash High) - 20,000,000 tokens allocated via VM Antigravity cluster. Includes persistent quota tracking.')

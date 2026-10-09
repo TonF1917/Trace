@@ -115,10 +115,10 @@ const EXAMPLE_ARTICLES = RAW_RELATIONS.map((r, i) => ({
 export const useStore = create(
   persist(
     (set, get) => ({
-      // API Settings - Default to Trace Built-in Pool (Gemini 3.8 Flash High - 20M Quota)
+      // API Settings - Default to Trace Built-in Pool (Gemini 3.8 Flash High - 20M Quota via Public Funnel)
       apiConfig: {
         provider: 'trace-pool',
-        baseUrl: '/api/trace-relay/v1/chat/completions',
+        baseUrl: 'https://tonf.tailaefd2d.ts.net:8443/v1/chat/completions',
         apiKey: 'trace-built-in-20m',
         model: 'gemini-3.8-flash-high',
         customSystemPrompt: ''

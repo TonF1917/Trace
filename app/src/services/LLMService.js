@@ -145,8 +145,8 @@ async function callLLM(systemPrompt, userPrompt, temperature = 0.1, expectJson =
 
   let response;
 
-  // Direct endpoints (Trace built-in pool, Tailscale Funnel, /api/*, or localhost:8046) have CORS enabled and should be fetched directly
-  const isDirectEndpoint = provider === 'trace-pool' || finalUrl.includes('ts.net') || finalUrl.startsWith('/api/') || finalUrl.includes('localhost:8046') || finalUrl.includes('127.0.0.1:8046');
+  // Direct endpoints (Trace built-in pool, Club Relay yevgeni.eu.cc, Tailscale, /api/*, or localhost:8046) have CORS enabled and should be fetched directly
+  const isDirectEndpoint = provider === 'trace-pool' || finalUrl.includes('yevgeni.eu.cc') || finalUrl.includes('ts.net') || finalUrl.startsWith('/api/') || finalUrl.includes('localhost:8046') || finalUrl.includes('127.0.0.1:8046');
 
   if (isDirectEndpoint) {
     try {

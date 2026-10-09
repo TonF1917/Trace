@@ -88,10 +88,10 @@ export function Settings() {
     switch(provider) {
       case 'trace-pool':
         return {
-          url: 'https://tonf.tailaefd2d.ts.net:8443/v1/chat/completions',
+          url: 'https://relay.yevgeni.eu.cc/v1/chat/completions',
           model: 'gemini-3.8-flash-high',
-          apiKey: 'trace-built-in-20m',
-          desc: t('Trace Built-in Pool (Gemini 3.8 Flash High) - 20,000,000 tokens allocated via VM Antigravity cluster. Includes persistent quota tracking.')
+          apiKey: 'sk-18c47b145b9048c096ea8d81906a253c',
+          desc: t('Trace Built-in Pool (Gemini 3.8 Flash High) - 20,000,000 tokens allocated via Club Relay (yevgeni.eu.cc). Zero configuration required.')
         };
       case 'freellmapi':
         return {

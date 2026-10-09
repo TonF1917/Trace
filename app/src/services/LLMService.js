@@ -41,15 +41,15 @@ export function cleanAndParseJson(text) {
 
 async function callLLM(systemPrompt, userPrompt, temperature = 0.1, expectJson = true) {
   const { apiConfig } = useStore.getState();
-  
-  const currentApiKey = apiConfig.apiKey || (apiConfig.provider === 'freellmapi' ? 'freellmapi-96146ee70cfe916f131303a9dee491c45f5c979f6e9fe93c' : '');
-  
-  if (!currentApiKey && !['lmstudio', 'ollama'].includes(apiConfig.provider)) {
+  const provider = apiConfig.provider || 'trace-pool';
+
+  const currentApiKey = apiConfig.apiKey || (provider === 'trace-pool' ? 'trace-built-in-20m' : (provider === 'freellmapi' ? 'freellmapi-96146ee70cfe916f131303a9dee491c45f5c979f6e9fe93c' : ''));
+
+  if (!currentApiKey && !['lmstudio', 'ollama'].includes(provider)) {
     throw new Error('API Key is missing. Please configure it in Settings.');
   }
 
   let url, headers, body;
-  const provider = apiConfig.provider || 'freellmapi';
 
   if (provider === 'lmstudio') {
     url = apiConfig.baseUrl || 'http://localhost:1234/v1/chat/completions';
@@ -99,15 +99,21 @@ async function callLLM(systemPrompt, userPrompt, temperature = 0.1, expectJson =
       }
     });
   } else {
-    // FreeLLMAPI or OpenAI & Compatible
-    const defaultUrl = provider === 'freellmapi' ? 'http://localhost:8000/v1/chat/completions' : 'https://api.openai.com/v1/chat/completions';
+    // Trace Pool or FreeLLMAPI or OpenAI & Compatible
+    let defaultUrl = 'https://api.openai.com/v1/chat/completions';
+    if (provider === 'trace-pool') {
+      defaultUrl = '/api/trace-relay/v1/chat/completions';
+    } else if (provider === 'freellmapi') {
+      defaultUrl = 'http://localhost:8000/v1/chat/completions';
+    }
+
     let cleanUrl = (apiConfig.baseUrl || defaultUrl).trim();
     // Auto-append /chat/completions if the user only provided the Base URL
-    if (!cleanUrl.includes('/chat/completions') && !cleanUrl.includes('/completions') && !cleanUrl.includes('/api/chat')) {
+    if (!cleanUrl.includes('/chat/completions') && !cleanUrl.includes('/completions') && !cleanUrl.includes('/api/chat') && !cleanUrl.includes('/api/trace-relay')) {
       cleanUrl = cleanUrl.replace(/\/$/, '') + '/chat/completions';
     }
     url = cleanUrl;
-    
+
     headers = {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${currentApiKey}`
@@ -124,62 +130,25 @@ async function callLLM(systemPrompt, userPrompt, temperature = 0.1, expectJson =
 
     if (apiConfig.model && apiConfig.model.toLowerCase() !== 'auto') {
       requestBody.model = apiConfig.model;
+    } else if (provider === 'trace-pool') {
+      requestBody.model = 'gemini-3.8-flash-high';
     }
 
     body = JSON.stringify(requestBody);
   }
 
-  // Auto-fix missing http/https
+  // Auto-fix missing http/https (preserve relative /api/ paths)
   let finalUrl = url.trim();
-  if (finalUrl !== '/api/chat' && !finalUrl.startsWith('http://') && !finalUrl.startsWith('https://')) {
+  if (!finalUrl.startsWith('/api/') && !finalUrl.startsWith('http://') && !finalUrl.startsWith('https://')) {
     finalUrl = 'https://' + finalUrl;
   }
 
   let response;
-  
-  // Try using the built-in local CORS proxy first (runs as a Vite plugin during dev)
-  const proxyUrl = '/proxy';
-  let proxyFailed = false;
 
-  try {
-    response = await fetch(proxyUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        targetUrl: finalUrl,
-        headers: headers,
-        body: JSON.parse(body),
-        systemProxy: apiConfig.systemProxy || ''
-      })
-    });
-    
-    // If we are on a static deployment (like GitHub Pages), the /proxy route won't exist and returns 404
-    if (response.status === 404) {
-      proxyFailed = true;
-    } else if (response.status === 500) {
-      // If the proxy responds with a 500 error related to Node.js network failure
-      const errorText = await response.clone().text();
-      try {
-        const errorData = JSON.parse(errorText);
-        if (errorData.error === 'Proxy Request Failed') {
-          throw new Error(`Proxy Backend Network Error: ${errorData.details}. ${errorData.cause ? '(' + errorData.cause + ')' : ''}`);
-        }
-      } catch (e) {
-        // Not a JSON proxy error
-      }
-    }
-  } catch (proxyError) {
-    if (proxyError.message.includes('Failed to fetch') || proxyFailed) {
-      // Local proxy server is completely dead/unreachable. Fallback to direct browser fetch.
-      proxyFailed = true;
-    } else {
-      // A genuine connection error from the proxy (e.g. ECONNREFUSED to target API)
-      throw proxyError;
-    }
-  }
+  // Local endpoints (/api/* or localhost:8046) should be fetched directly without passing through /proxy
+  const isLocalEndpoint = finalUrl.startsWith('/api/') || finalUrl.includes('localhost:8046') || finalUrl.includes('127.0.0.1:8046');
 
-  // Fallback to direct browser fetch if the local proxy isn't running
-  if (proxyFailed) {
+  if (isLocalEndpoint) {
     try {
       response = await fetch(finalUrl, {
         method: 'POST',
@@ -187,13 +156,67 @@ async function callLLM(systemPrompt, userPrompt, temperature = 0.1, expectJson =
         body
       });
     } catch (networkError) {
-      throw new Error(`Network Error (获取失败): Failed to connect to ${finalUrl}. 
-      This usually happens because:
-      1) If using an overseas API (like OpenAI/Claude), your VPN is not configured to proxy browser requests.
-      2) The API provider blocks direct browser requests (CORS policy). 👉 Highly recommended: Install the "Allow CORS" browser extension!
-      3) If using local models (LM Studio/Ollama), the software is not running or CORS is not enabled.
-      4) The domain name is typed incorrectly.
-      [Underlying error: ${networkError.message}]`);
+      throw new Error(`Local Relay Connection Error: Failed to reach ${finalUrl}. Make sure Vite dev server or trace_relay (port 8046) is running. [Details: ${networkError.message}]`);
+    }
+  } else {
+    // Try using the built-in local CORS proxy first (runs as a Vite plugin during dev)
+    const proxyUrl = '/proxy';
+    let proxyFailed = false;
+
+    try {
+      response = await fetch(proxyUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          targetUrl: finalUrl,
+          headers: headers,
+          body: JSON.parse(body),
+          systemProxy: apiConfig.systemProxy || ''
+        })
+      });
+
+      // If we are on a static deployment (like GitHub Pages), the /proxy route won't exist and returns 404
+      if (response.status === 404) {
+        proxyFailed = true;
+      } else if (response.status === 500) {
+        // If the proxy responds with a 500 error related to Node.js network failure
+        const errorText = await response.clone().text();
+        try {
+          const errorData = JSON.parse(errorText);
+          if (errorData.error === 'Proxy Request Failed') {
+            throw new Error(`Proxy Backend Network Error: ${errorData.details}. ${errorData.cause ? '(' + errorData.cause + ')' : ''}`);
+          }
+        } catch (e) {
+          // Not a JSON proxy error
+        }
+      }
+    } catch (proxyError) {
+      if (proxyError.message.includes('Failed to fetch') || proxyFailed) {
+        // Local proxy server is completely dead/unreachable. Fallback to direct browser fetch.
+        proxyFailed = true;
+      } else {
+        // A genuine connection error from the proxy (e.g. ECONNREFUSED to target API)
+        throw proxyError;
+      }
+    }
+
+    // Fallback to direct browser fetch if the local proxy isn't running
+    if (proxyFailed) {
+      try {
+        response = await fetch(finalUrl, {
+          method: 'POST',
+          headers,
+          body
+        });
+      } catch (networkError) {
+        throw new Error(`Network Error (获取失败): Failed to connect to ${finalUrl}.
+        This usually happens because:
+        1) If using an overseas API (like OpenAI/Claude), your VPN is not configured to proxy browser requests.
+        2) The API provider blocks direct browser requests (CORS policy). 👉 Highly recommended: Install the "Allow CORS" browser extension!
+        3) If using local models (LM Studio/Ollama), the software is not running or CORS is not enabled.
+        4) The domain name is typed incorrectly.
+        [Underlying error: ${networkError.message}]`);
+      }
     }
   }
 
@@ -470,7 +493,11 @@ Return ONLY a valid JSON object with the following structure:
 /**
  * Generates a comprehensive analytical briefing report in Markdown based on graph topology.
  */
-export async function generateTopologyReport(project, metrics) {
+export async function generateTopologyReport(project, metrics, options = {}) {
+  if (options && (options.reportType === 'irr_matrix' || options.reportType === 'synthesis_matrix')) {
+    return generateLiteratureSynthesisMatrix(project, options.articles || [], project.frames, project.relations);
+  }
+
   const customSystemPrompt = useStore.getState().apiConfig.customSystemPrompt;
   
   const systemPrompt = customSystemPrompt || `You are a world-class academic political scientist and computational media analyst.
@@ -526,5 +553,78 @@ ${communitiesStr}
 Please generate the complete Markdown analysis report.`;
 
   return callLLM(systemPrompt, userPrompt, 0.4, false);
+}
+
+/**
+ * Generates an academic Markdown table and synthesis report formatted for a comparative political communication and multi-perspective literature review.
+ * Output columns: | Source / Author | Perspective & Frame | Attribution / Responsibility Target | Key Claim & Quote | Methodological Limitation / Tension |
+ */
+export async function generateLiteratureSynthesisMatrix(param1, param2, param3, param4) {
+  let project, articles, relations, frames;
+  if (Array.isArray(param1)) {
+    // Signature: generateLiteratureSynthesisMatrix(articles, relations, frames)
+    articles = param1;
+    relations = param2 || [];
+    frames = param3 || [];
+    project = param4 || { name: 'Literature Review Research Synthesis', description: '' };
+  } else {
+    // Signature: generateLiteratureSynthesisMatrix(project, articles, frames, relations)
+    project = param1 || { name: 'Literature Review Research Synthesis', description: '' };
+    articles = param2 || [];
+    frames = param3 || project.frames || [];
+    relations = param4 || project.relations || [];
+  }
+
+  const processedArticles = articles.filter(a => a.isProcessed);
+  const items = processedArticles.map((a, i) => {
+    const actor = a.actors?.main_actor || 'Unknown Actor';
+    const target = a.actors?.blame_target || 'Unknown Target';
+    const rel = a.relation_type || 'Relates to';
+    const frame = Array.isArray(a.frames) && a.frames.length > 0 ? a.frames.join(', ') : (a.frame || 'General');
+    const tone = a.tone || 'Objective';
+    const quote = a.quote || a.headline || '';
+    const source = a.source_name || a.source_id || 'Primary Source';
+    const date = a.date || '';
+    return `[#${i + 1}] Source: ${source} (${date})\n- Main Perspective / Actor: ${actor}\n- Attribution Target: ${target}\n- Frame: ${frame} | Tone: ${tone}\n- Relation: ${rel}\n- Evidence / Quote: "${quote}"\n- Rationale: ${a.rationale || ''}`;
+  }).slice(0, 35);
+
+  const customSystemPrompt = useStore.getState().apiConfig.customSystemPrompt;
+
+  const systemPrompt = customSystemPrompt || `You are an expert Academic Reader and Methodologist specializing in comparative political communication and multi-perspective literature review.
+Your task is to analyze the provided source corpus, perspective framing, and attribution targets to generate an authoritative Academic Literature Synthesis Matrix in Markdown format.
+
+The report MUST begin with an academic Markdown table with EXACTLY the following 5 columns:
+| Source / Author | Perspective & Frame | Attribution / Responsibility Target | Key Claim & Quote | Methodological Limitation / Tension |
+
+Followed by an analytical narrative synthesizing the perspectives:
+# 📑 ${project.name} - 文献交叉对比矩阵与多视角综合报告
+
+## 1. 跨视角学术对比矩阵 (Academic Synthesis Matrix)
+[Render the full Markdown table here. Each row must synthesize a distinct primary source, ideological faction, or scholar perspective based on the corpus data.]
+
+## 2. 论证主线与视角张力分析 (Line of Reasoning & Perspective Tension)
+- **核心对立轴心 (Primary Conflicting Lenses)**: 经济效率、意识形态纯洁性与社会治理之间的不可调和矛盾。
+- **利益相关者责任归因网络 (Stakeholder Attribution Asymmetry)**: 各方如何建构替罪羊或推卸危机责任？
+- **论据可信度与方法论局限 (Evidential Limitations & Biases)**: 官方档案 vs. 反对派刊物等文献的历史语境与样本偏差。
+
+## 3. 综合研判与学术结论 (Synthesis & Nuanced Conclusion)
+- 提炼超越单一视角的综合性学术结论（Nuanced Synthesis），指出政策演进的历史必然性与结构性张力。
+
+CRITICAL RULES:
+1. Output MUST be formatted in clean, valid Markdown.
+2. The table MUST have the exact requested 5 columns.
+3. Every row must synthesize actual evidence from the provided source corpus.
+4. Maintain formal, publication-grade academic prose.`;
+
+  const userPrompt = `Project Context:
+Project Name: ${project.name}
+Description: ${project.description || 'N/A'}
+
+Corpus Claims & Evidential Links (${processedArticles.length} total processed claims):
+${items.join('\n\n')}
+
+Please generate the complete Literature Synthesis Table and Multi-Perspective Analysis Report.`;
+
+  return callLLM(systemPrompt, userPrompt, 0.3, false);
 }
 

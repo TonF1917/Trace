@@ -4,6 +4,33 @@ import tailwindcss from '@tailwindcss/vite'
 import express from 'express'
 import axios from 'axios'
 import { HttpsProxyAgent } from 'https-proxy-agent'
+import {
+  handleRelayChatCompletions,
+  handleQuotaStatus,
+  handleModelsList
+} from './quota_manager.mjs'
+
+function traceRelayPlugin() {
+  return {
+    name: 'trace-relay-plugin',
+    configureServer(server) {
+      server.middlewares.use('/api/trace-relay', express.json({ limit: '50mb' }));
+      server.middlewares.use('/api/trace-relay', async (req, res, next) => {
+        const url = (req.url || '').split('?')[0];
+        if (url === '/quota' || url.endsWith('/quota')) {
+          return handleQuotaStatus(req, res);
+        }
+        if (url === '/v1/models' || url === '/models' || url.endsWith('/models')) {
+          return handleModelsList(req, res);
+        }
+        if (url === '/v1/chat/completions' || url === '/chat/completions' || url.endsWith('/chat/completions')) {
+          return handleRelayChatCompletions(req, res);
+        }
+        next();
+      });
+    }
+  };
+}
 
 function localProxyPlugin() {
   return {
@@ -72,6 +99,7 @@ export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
+    traceRelayPlugin(),
     localProxyPlugin()
   ],
 })

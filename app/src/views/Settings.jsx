@@ -1,26 +1,59 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store';
-import { ArrowLeft, Save, Key, Server, Cpu, ShieldCheck, Box, ChevronDown, Bot, Database, Search, Zap, Network, Brain, Sparkles, Globe } from 'lucide-react';
+import { ArrowLeft, Save, Key, Server, Cpu, ShieldCheck, Box, ChevronDown, Bot, Database, Search, Zap, Network, Brain, Sparkles, Globe, RotateCw, Activity } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 export function Settings() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const { apiConfig, setApiConfig } = useStore();
-  
+
   const [formData, setFormData] = useState({
-    provider: apiConfig.provider || 'freellmapi',
-    baseUrl: apiConfig.baseUrl || 'http://localhost:8000/v1/chat/completions',
-    apiKey: apiConfig.apiKey || 'freellmapi-96146ee70cfe916f131303a9dee491c45f5c979f6e9fe93c',
-    model: apiConfig.model || 'auto',
+    provider: apiConfig.provider || 'trace-pool',
+    baseUrl: apiConfig.baseUrl || '/api/trace-relay/v1/chat/completions',
+    apiKey: apiConfig.apiKey || 'trace-built-in-20m',
+    model: apiConfig.model || 'gemini-3.8-flash-high',
     customSystemPrompt: apiConfig.customSystemPrompt || ''
   });
 
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [imgErrors, setImgErrors] = useState({});
 
+  const [quotaData, setQuotaData] = useState(null);
+  const [quotaLoading, setQuotaLoading] = useState(false);
+  const [quotaError, setQuotaError] = useState(null);
+
+  const fetchQuota = useCallback(async () => {
+    setQuotaLoading(true);
+    setQuotaError(null);
+    try {
+      let res;
+      try {
+        res = await fetch('/api/trace-relay/quota');
+      } catch {
+        // Fallback to standalone port 8046 if Vite dev middleware is unreachable
+        res = await fetch('http://localhost:8046/quota');
+      }
+      if (res && res.ok) {
+        const data = await res.json();
+        setQuotaData(data);
+      } else {
+        setQuotaError('Unable to fetch quota status');
+      }
+    } catch (e) {
+      setQuotaError(e.message);
+    } finally {
+      setQuotaLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchQuota();
+  }, [fetchQuota]);
+
   const renderIcon = (id, className) => {
+    if (id === 'trace-pool') return <Zap className={`${className} text-rose-500`} />;
     if (id === 'lmstudio') return <Cpu className={className} />;
     if (id === 'siliconflow') return <Zap className={className} />;
     
@@ -50,6 +83,13 @@ export function Settings() {
 
   const getProviderDefaults = (provider) => {
     switch(provider) {
+      case 'trace-pool':
+        return {
+          url: '/api/trace-relay/v1/chat/completions',
+          model: 'gemini-3.8-flash-high',
+          apiKey: 'trace-built-in-20m',
+          desc: t('Trace Built-in Pool (Gemini 3.8 Flash High) - 20,000,000 tokens allocated via VM Antigravity cluster. Includes persistent quota tracking.')
+        };
       case 'freellmapi':
         return {
           url: 'http://localhost:8000/v1/chat/completions',
@@ -130,7 +170,8 @@ export function Settings() {
   };
 
   const providersList = [
-    { id: 'freellmapi', name: t('FreeLLMAPI (Default API)'), icon: Key },
+    { id: 'trace-pool', name: t('Trace Built-in Pool (Gemini 3.8 Flash High - 20M Quota)'), icon: Zap },
+    { id: 'freellmapi', name: t('FreeLLMAPI (Alternative Free API)'), icon: Key },
     { id: 'openai', name: t('OpenAI & Compatible (Standard)'), icon: Bot },
     { id: 'lmstudio', name: t('LM Studio (Local)'), icon: Cpu },
     { id: 'ollama', name: t('Ollama (Local)'), icon: Database },
@@ -222,6 +263,71 @@ export function Settings() {
                 )}
               </div>
             </div>
+
+            {formData.provider === 'trace-pool' && (
+              <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 text-white shadow-md space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Activity className="w-4 h-4 text-rose-400" />
+                    <span className="text-sm font-semibold text-slate-200">{t('20M Pool Quota Status')}</span>
+                    <span className="px-2 py-0.5 text-xs bg-rose-500/20 text-rose-300 font-mono rounded-full border border-rose-500/30">
+                      gemini-3.8-flash-high
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={fetchQuota}
+                    disabled={quotaLoading}
+                    className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-200 transition-colors bg-slate-800/80 px-2.5 py-1 rounded-md hover:bg-slate-800 border border-slate-700 cursor-pointer"
+                  >
+                    <RotateCw className={`w-3.5 h-3.5 ${quotaLoading ? 'animate-spin' : ''}`} />
+                    {t('Refresh Quota')}
+                  </button>
+                </div>
+
+                {quotaData ? (
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-baseline text-xs text-slate-300">
+                      <div>
+                        <span className="text-slate-400">{t('Used')}: </span>
+                        <span className="font-mono font-bold text-white">{(quotaData.used_tokens || 0).toLocaleString()}</span>
+                        <span className="text-slate-500"> / {(quotaData.total_allocated || 20000000).toLocaleString()} tokens</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400">{t('Remaining')}: </span>
+                        <span className="font-mono font-bold text-emerald-400">{(quotaData.remaining_tokens ?? 20000000).toLocaleString()}</span>
+                        <span className="text-slate-500"> ({(((quotaData.remaining_tokens ?? 20000000) / (quotaData.total_allocated || 20000000)) * 100).toFixed(1)}%)</span>
+                      </div>
+                    </div>
+
+                    <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden border border-slate-700">
+                      <div
+                        className="h-full bg-gradient-to-r from-rose-500 to-amber-500 transition-all duration-500"
+                        style={{ width: `${Math.min(100, Math.max(0, ((quotaData.used_tokens || 0) / (quotaData.total_allocated || 20000000)) * 100))}%` }}
+                      />
+                    </div>
+
+                    <div className="flex justify-between items-center text-[11px] text-slate-400 pt-1">
+                      <span>{t('Upstream')}: VM Antigravity (127.0.0.1:8045)</span>
+                      <span className="font-mono text-slate-400">
+                        {quotaData.updated_at ? new Date(quotaData.updated_at).toLocaleTimeString() : ''}
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-xs text-slate-400 flex items-center justify-between">
+                    <span>{quotaLoading ? t('Checking quota status...') : (quotaError ? `${t('Quota sync error')}: ${quotaError}` : t('Loading quota...'))}</span>
+                    <button
+                      type="button"
+                      onClick={fetchQuota}
+                      className="text-xs text-rose-400 underline hover:text-rose-300 cursor-pointer"
+                    >
+                      {t('Retry')}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
 
                 <div className="space-y-2">
                   <label className="flex items-center gap-2 text-sm font-bold text-slate-700">

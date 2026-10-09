@@ -15,44 +15,53 @@ export function MethodModal({ onClose }) {
           </button>
         </div>
         
-        <div className="p-8 overflow-y-auto space-y-8">
-          
+        <div className="p-8 overflow-y-auto space-y-8 font-serif-academic">
+
           <section>
-            <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-3 flex items-center gap-2">
+            <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-3 flex items-center gap-2 font-sans">
               <span className="w-6 h-px bg-slate-300"></span>
-              Article Selection
+              Article Selection & Archival Sampling
             </h3>
-            <p className="text-sm text-slate-600 leading-relaxed">
-              Articles are sampled from major international and domestic outlets representing distinct geopolitical and ideological vantage points (e.g., The New York Times, Fox News, BBC, Al Jazeera). The selection captures the initial 48-72 hours of breaking news coverage for each specified event to analyze the primary framing mechanics before the narrative solidifies.
+            <p className="text-sm text-slate-700 leading-relaxed">
+              Articles and archival records are sampled across ideological vantage points (e.g., Soviet central party organs, regional agricultural gazettes, opposition platforms, and international observers). The methodology isolates attribution networks and narrative framing structures before consensus crystallizes.
             </p>
           </section>
 
           <section>
-            <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-3 flex items-center gap-2">
+            <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-3 flex items-center gap-2 font-sans">
               <span className="w-6 h-px bg-slate-300"></span>
-              Labeling Schema
+              Multi-Perspective Computational Framing Schema
             </h3>
-            <p className="text-sm text-slate-600 leading-relaxed mb-4">
-              Each article is structurally decomposed into core analytical fields:
+            <p className="text-sm text-slate-700 leading-relaxed mb-4">
+              Each source text is structurally decomposed into core analytical dimensions for multi-perspective synthesis:
             </p>
             <ul className="space-y-3">
-              <li className="text-sm text-slate-600 flex items-start gap-2">
-                <span className="font-bold text-slate-800 mt-0.5">Frames:</span>
-                <span>Categorized into overarching thematic structures (e.g., Security, Morality, Conflict, Economy) that guide reader interpretation.</span>
+              <li className="text-sm text-slate-700 flex items-start gap-2">
+                <span className="font-bold text-slate-900 mt-0.5 font-sans">Frames:</span>
+                <span>Thematic lenses (Economic & Developmental, Political & Governance, Social & Cultural, Ethical & Moral, Environmental & Technological) guiding evidence interpretation.</span>
               </li>
-              <li className="text-sm text-slate-600 flex items-start gap-2">
-                <span className="font-bold text-slate-800 mt-0.5">Main Actor:</span>
-                <span>The primary entity driving the action or subject of the headline.</span>
+              <li className="text-sm text-slate-700 flex items-start gap-2">
+                <span className="font-bold text-slate-900 mt-0.5 font-sans">Main Actor:</span>
+                <span>The focal stakeholder, institution, or faction asserting claims or directing policy actions.</span>
               </li>
-              <li className="text-sm text-slate-600 flex items-start gap-2">
-                <span className="font-bold text-slate-800 mt-0.5">Blame Target:</span>
-                <span>The specific entity held explicitly or implicitly responsible for the crisis or conflict within the narrative.</span>
+              <li className="text-sm text-slate-700 flex items-start gap-2">
+                <span className="font-bold text-slate-900 mt-0.5 font-sans">Blame / Attribution Target:</span>
+                <span>The explicit entity, systemic constraint, or rival faction held accountable within the discursive line of reasoning.</span>
               </li>
             </ul>
           </section>
 
+          <section className="bg-purple-50/70 p-5 rounded-xl border border-purple-200">
+            <h3 className="text-sm font-bold text-purple-900 uppercase tracking-wider mb-2 font-sans">
+              Academic Synthesis & Research Instrument
+            </h3>
+            <p className="text-sm text-purple-950 leading-relaxed font-serif-academic">
+              Developed as a computational instrument for comparative political communication, multi-perspective literature reviews, and digital humanities research. Trace models discursive power dynamics, institutional tensions, and evidence synthesis without predetermining normative verdicts.
+            </p>
+          </section>
+
           <section className="bg-rose-50 p-5 rounded-xl border border-rose-100">
-            <h3 className="text-sm font-bold text-rose-900 uppercase tracking-wider mb-2">
+            <h3 className="text-sm font-bold text-rose-900 uppercase tracking-wider mb-2 font-sans">
               Interpretation Note
             </h3>
             <p className="text-sm text-rose-800 leading-relaxed font-medium">

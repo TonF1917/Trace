@@ -1,20 +1,23 @@
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getGraphGlobalMetrics } from '../utils/graphAnalytics';
-import { generateTopologyReport } from '../services/LLMService';
-import { 
-  Network, 
-  Share2, 
-  Users, 
-  Award, 
-  FileText, 
-  Download, 
-  Sparkles, 
-  Search, 
+import { generateTopologyReport, generateLiteratureSynthesisMatrix } from '../services/LLMService';
+import {
+  Network,
+  Share2,
+  Users,
+  Award,
+  FileText,
+  Download,
+  Sparkles,
+  Search,
   ArrowUpDown,
   Layers,
   Zap,
-  Target
+  Target,
+  Copy,
+  Check,
+  Table
 } from 'lucide-react';
 
 export function GraphAnalyticsView({ project, articles }) {
@@ -23,18 +26,40 @@ export function GraphAnalyticsView({ project, articles }) {
   const [sortField, setSortField] = useState('degree');
   const [sortAsc, setSortAsc] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [reportType, setReportType] = useState('topology'); // 'topology' | 'synthesis_matrix'
   const [aiReport, setAiReport] = useState('');
   const [reportError, setReportError] = useState('');
+  const [isCopied, setIsCopied] = useState(false);
 
   // Extract nodes and links from processed articles
   const { nodes, links } = useMemo(() => {
     const nodeMap = new Map();
     const linkList = [];
 
+    const getRels = (article) => {
+      if (article.extractedData && Array.isArray(article.extractedData.relationships) && article.extractedData.relationships.length > 0) {
+        return article.extractedData.relationships;
+      }
+      if (article.extractedData && Array.isArray(article.extractedData.relations) && article.extractedData.relations.length > 0) {
+        return article.extractedData.relations;
+      }
+      if (article.actors && article.actors.main_actor && article.actors.blame_target) {
+        return [{
+          date: article.date,
+          main_actor: article.actors.main_actor,
+          blame_target: article.actors.blame_target,
+          relation_type: article.relation_type || 'Opposes / Blames',
+          frames: article.frames || [],
+          tone: article.tone || 'Neutral',
+          quote: article.quote || article.headline || ''
+        }];
+      }
+      return [];
+    };
+
     articles.forEach(article => {
-      if (!article.isProcessed || !article.extractedData) return;
-      const data = article.extractedData;
-      const rels = data.relationships || data.relations || [];
+      if (!article.isProcessed) return;
+      const rels = getRels(article);
 
       rels.forEach(rel => {
         const actor = rel.main_actor || rel.actor || rel.source;
@@ -105,6 +130,7 @@ export function GraphAnalyticsView({ project, articles }) {
 
   const handleGenerateReport = async () => {
     if (nodes.length === 0) return;
+    setReportType('topology');
     setIsGenerating(true);
     setReportError('');
     try {
@@ -117,13 +143,41 @@ export function GraphAnalyticsView({ project, articles }) {
     }
   };
 
+  const handleGenerateSynthesisMatrix = async () => {
+    const processed = articles.filter(a => a.isProcessed);
+    if (processed.length === 0) return;
+    setReportType('synthesis_matrix');
+    setIsGenerating(true);
+    setReportError('');
+    try {
+      const report = await generateLiteratureSynthesisMatrix(project, articles);
+      setAiReport(report);
+    } catch (err) {
+      setReportError(err.message || 'Failed to generate Literature Synthesis Matrix');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleCopyMarkdown = async () => {
+    if (!aiReport) return;
+    try {
+      await navigator.clipboard.writeText(aiReport);
+      setIsCopied(true);
+      setTimeout(() => setIsCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy markdown:', err);
+    }
+  };
+
   const handleExportMarkdown = () => {
     if (!aiReport) return;
     const blob = new Blob([aiReport], { type: 'text/markdown;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${project.name.replace(/\s+/g, '_')}_Topology_Report.md`;
+    const suffix = reportType === 'synthesis_matrix' || reportType === 'irr_matrix' ? 'Literature_Synthesis_Matrix' : 'Topology_Report';
+    a.download = `${project.name.replace(/\s+/g, '_')}_${suffix}.md`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -144,14 +198,27 @@ export function GraphAnalyticsView({ project, articles }) {
           </p>
         </div>
 
-        <button
-          onClick={handleGenerateReport}
-          disabled={isGenerating || nodes.length === 0}
-          className="flex items-center gap-2 px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold shadow-sm transition disabled:opacity-50"
-        >
-          <Sparkles className={`w-4 h-4 ${isGenerating ? 'animate-spin' : ''}`} />
-          {isGenerating ? t('Generating Report...') : t('Generate AI Analysis Report')}
-        </button>
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={handleGenerateReport}
+            disabled={isGenerating || nodes.length === 0}
+            className="flex items-center gap-2 px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold shadow-sm transition disabled:opacity-50"
+            title={t('Generate AI Analysis Report')}
+          >
+            <Sparkles className={`w-4 h-4 ${isGenerating && reportType === 'topology' ? 'animate-spin' : ''}`} />
+            {isGenerating && reportType === 'topology' ? t('Generating Report...') : t('Generate AI Analysis Report')}
+          </button>
+
+          <button
+            onClick={handleGenerateSynthesisMatrix}
+            disabled={isGenerating || articles.filter(a => a.isProcessed).length === 0}
+            className="flex items-center gap-2 px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold shadow-sm transition disabled:opacity-50"
+            title={t('Generate Literature Synthesis Matrix')}
+          >
+            <Table className={`w-4 h-4 ${isGenerating && reportType === 'synthesis_matrix' ? 'animate-spin' : ''}`} />
+            {isGenerating && reportType === 'synthesis_matrix' ? t('Generating Synthesis Matrix...') : t('Generate Literature Synthesis Matrix')}
+          </button>
+        </div>
       </div>
 
       {/* Global Metrics Summary Cards */}
@@ -266,37 +333,63 @@ export function GraphAnalyticsView({ project, articles }) {
         </div>
       </div>
 
-      {/* AI Topology Briefing Report Section */}
+      {/* AI Topology Briefing / Synthesis Report Section */}
       {(aiReport || isGenerating || reportError) && (
         <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
             <h2 className="text-lg font-black text-slate-900 flex items-center gap-2">
-              <FileText className="w-5 h-5 text-rose-600" />
-              {t('AI Topology Briefing Report')}
+              {reportType === 'synthesis_matrix' || reportType === 'irr_matrix' ? (
+                <>
+                  <Table className="w-5 h-5 text-purple-600" />
+                  <span>{t('Literature Synthesis Matrix')}</span>
+                </>
+              ) : (
+                <>
+                  <FileText className="w-5 h-5 text-rose-600" />
+                  <span>{t('AI Topology Briefing Report')}</span>
+                </>
+              )}
             </h2>
 
             {aiReport && (
-              <button
-                onClick={handleExportMarkdown}
-                className="flex items-center gap-2 px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-lg border border-slate-300 transition"
-              >
-                <Download className="w-3.5 h-3.5" />
-                {t('Export Markdown')}
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleCopyMarkdown}
+                  className={`flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded-lg border transition ${
+                    isCopied
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
+                      : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
+                  }`}
+                  title={t('Copy Markdown')}
+                >
+                  {isCopied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5 text-slate-600" />}
+                  <span>{isCopied ? t('Copied!') : t('Copy Markdown')}</span>
+                </button>
+                <button
+                  onClick={handleExportMarkdown}
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-lg border border-slate-300 transition"
+                  title={t('Export Markdown')}
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>{t('Export Markdown')}</span>
+                </button>
+              </div>
             )}
           </div>
 
           {isGenerating ? (
             <div className="py-12 flex flex-col items-center justify-center space-y-3 text-slate-500">
               <Sparkles className="w-8 h-8 text-rose-600 animate-spin" />
-              <p className="text-sm font-bold">{t('Generating Report...')}</p>
+              <p className="text-sm font-bold">
+                {reportType === 'irr_matrix' ? t('Generating Synthesis Matrix...') : t('Generating Report...')}
+              </p>
             </div>
           ) : reportError ? (
             <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-sm font-medium">
               {reportError}
             </div>
           ) : (
-            <div className="prose prose-slate max-w-none text-sm leading-relaxed whitespace-pre-wrap bg-slate-50 p-6 rounded-xl border border-slate-200 font-sans text-slate-800">
+            <div className="prose prose-slate max-w-none text-sm leading-relaxed whitespace-pre-wrap bg-slate-50 p-6 rounded-xl border border-slate-200 font-serif-academic text-slate-900 shadow-inner overflow-x-auto">
               {aiReport}
             </div>
           )}

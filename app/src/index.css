@@ -2,6 +2,11 @@
 
 @theme {
   --font-sans: "Inter", system-ui, sans-serif;
+  --font-serif-academic: "Source Han Serif SC", "Noto Serif SC", "思源宋体", Georgia, "Times New Roman", SimSun, serif;
+}
+
+.font-serif-academic {
+  font-family: 'Source Han Serif SC', 'Noto Serif SC', '思源宋体', Georgia, 'Times New Roman', SimSun, serif;
 }
 
 body {

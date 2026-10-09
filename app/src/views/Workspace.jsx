@@ -664,13 +664,34 @@ export function Workspace() {
     <div className="flex h-screen bg-slate-50 overflow-hidden font-sans">
       {/* Left Sidebar - Data Manager */}
       <aside className="w-96 bg-white border-r border-slate-200 flex flex-col h-full z-20 shadow-sm transition-all duration-300">
-        <div className="p-5 border-b border-slate-100 flex items-center justify-between">
-           <button onClick={() => navigate('/')} className="text-slate-400 hover:text-slate-800 transition-colors">
+        <div className="p-4 border-b border-slate-100 flex items-center justify-between gap-2">
+           <button onClick={() => navigate('/')} className="text-slate-400 hover:text-slate-800 transition-colors shrink-0">
              <ArrowLeft className="w-5 h-5" />
            </button>
-           <h2 className="font-black text-slate-800 truncate px-3">{project.name}</h2>
-           <button onClick={() => setIsMethodModalOpen(true)} className="text-xs font-bold text-rose-600 hover:underline">{t('Method')}</button>
+           <div className="flex-1 min-w-0 px-2">
+             <div className="flex items-center gap-1.5 flex-wrap">
+               <h2 className="font-black text-slate-800 truncate text-sm sm:text-base">{project.name}</h2>
+               {project.isExample && (
+                 <span className="px-2 py-0.5 bg-purple-100 text-purple-700 text-[10px] uppercase font-bold rounded shrink-0">
+                   {t('Case Study')}
+                 </span>
+               )}
+             </div>
+           </div>
+           <button onClick={() => setIsMethodModalOpen(true)} className="text-xs font-bold text-rose-600 hover:underline shrink-0">{t('Method')}</button>
         </div>
+
+        {project.isExample && (
+          <div className="mx-3 my-2.5 p-3 bg-purple-50/90 border border-purple-200 rounded-xl shadow-xs">
+            <div className="flex items-center gap-1.5 font-bold text-purple-900 text-xs mb-1">
+              <span className="w-2 h-2 rounded-full bg-purple-600 animate-pulse"></span>
+              <span>{t('Case Study')}</span>
+            </div>
+            <p className="text-[11px] text-purple-800/90 leading-relaxed font-serif-academic">
+              {t(project.description)}
+            </p>
+          </div>
+        )}
         
         <div className="p-4 bg-slate-50 border-b border-slate-100 flex justify-between items-center shrink-0">
           <span className="text-xs font-bold uppercase tracking-wider text-slate-500">

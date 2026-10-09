@@ -115,12 +115,12 @@ const EXAMPLE_ARTICLES = RAW_RELATIONS.map((r, i) => ({
 export const useStore = create(
   persist(
     (set, get) => ({
-      // API Settings - Default to FreeLLMAPI
+      // API Settings - Default to Trace Built-in Pool (Gemini 3.8 Flash High - 20M Quota)
       apiConfig: {
-        provider: 'freellmapi',
-        baseUrl: 'http://localhost:8000/v1/chat/completions',
-        apiKey: 'freellmapi-96146ee70cfe916f131303a9dee491c45f5c979f6e9fe93c',
-        model: 'auto',
+        provider: 'trace-pool',
+        baseUrl: '/api/trace-relay/v1/chat/completions',
+        apiKey: 'trace-built-in-20m',
+        model: 'gemini-3.8-flash-high',
         customSystemPrompt: ''
       },
       setApiConfig: (config) => set({ apiConfig: { ...get().apiConfig, ...config } }),
@@ -161,19 +161,25 @@ export const useStore = create(
       initializeFromDatabase: () => set((state) => {
         let updatedProjects = state.projects || [];
         let updatedArticles = state.articles || [];
-        
+
         // Ensure the original example project (New Economic Policy) is always present
         const hasExample = updatedProjects.some(p => p.id === EXAMPLE_PROJECT.id || p.name === 'New Economic Policy (1921-1928)');
         if (!hasExample) {
           updatedProjects = [EXAMPLE_PROJECT, ...updatedProjects];
         } else {
-          updatedProjects = updatedProjects.map(p => 
-            (p.name === 'New Economic Policy (1921-1928)' && !p.isExample) 
-              ? { ...p, isExample: true } 
-              : p
-          );
+          updatedProjects = updatedProjects.map(p => {
+            if (p.name === 'New Economic Policy (1921-1928)' || p.id === EXAMPLE_PROJECT.id) {
+              const { provenance, ...cleanProject } = p;
+              return {
+                ...cleanProject,
+                isExample: true,
+                description: EXAMPLE_PROJECT.description
+              };
+            }
+            return p;
+          });
         }
-        
+
         // Ensure example project has all 49 historical articles
         const exampleArticlesCount = updatedArticles.filter(a => a.projectId === EXAMPLE_PROJECT.id).length;
         if (exampleArticlesCount < EXAMPLE_ARTICLES.length) {
@@ -183,12 +189,20 @@ export const useStore = create(
 
         return { projects: updatedProjects, articles: updatedArticles };
       }),
-      
+
       loadExampleProject: () => set((state) => {
         const hasExample = state.projects.some(p => p.id === EXAMPLE_PROJECT.id || p.name === 'New Economic Policy (1921-1928)');
         let updatedProjects = state.projects;
         if (!hasExample) {
           updatedProjects = [EXAMPLE_PROJECT, ...state.projects];
+        } else {
+          updatedProjects = state.projects.map(p => {
+            if (p.id === EXAMPLE_PROJECT.id || p.name === 'New Economic Policy (1921-1928)') {
+              const { provenance, ...cleanProject } = p;
+              return { ...cleanProject, ...EXAMPLE_PROJECT };
+            }
+            return p;
+          });
         }
 
         const otherArticles = state.articles.filter(a => a.projectId !== EXAMPLE_PROJECT.id);

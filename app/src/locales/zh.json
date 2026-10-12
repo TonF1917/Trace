@@ -22,6 +22,7 @@
   "Unselect All": "取消全选",
   "Add Source": "添加来源",
   "Export": "导出",
+  "Legend in Export": "导出包含图例",
   "Data": "数据",
   "Image": "图片",
   "Topology": "拓扑图",

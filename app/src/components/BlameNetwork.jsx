@@ -69,7 +69,7 @@ export function BlameNetwork({
   relationColors = {},
   onColorChange,
   isExporting = false,
-  exportSettings = { nodeScale: 0.8, textScale: 1.0, edgeScale: 1.0, arrowScale: 0.5, spreadScale: 1.0 },
+  exportSettings = { nodeScale: 0.8, textScale: 1.0, edgeScale: 1.0, arrowScale: 0.5, spreadScale: 1.0, showLegend: true },
   graphMode = 'explore',
   legendGroupMode: propLegendGroupMode,
   setLegendGroupMode: propSetLegendGroupMode,
@@ -268,7 +268,11 @@ export function BlameNetwork({
         if (!hiddenRelations.has(relType)) {
           const linkColor = RELATION_COLORS[relType] || RELATION_COLORS.default;
           const actorToTargetId = `${mainActorId}-${blameTargetId}-${relType}`;
-          if (!links.some(l => l.id === actorToTargetId)) {
+          const relFrames = Array.isArray(rel.frames) && rel.frames.length > 0
+            ? rel.frames
+            : (Array.isArray(article.frames) ? article.frames : []);
+          const existingLink = links.find(l => l.id === actorToTargetId);
+          if (!existingLink) {
             links.push({
               id: actorToTargetId,
               source: mainActorId,
@@ -276,10 +280,19 @@ export function BlameNetwork({
               label: relType,
               color: linkColor,
               dashed: false,
-              articleIds: new Set([article.id])
+              articleIds: new Set([article.id]),
+              frames: [...relFrames]
             });
           } else {
-            links.find(l => l.id === actorToTargetId).articleIds.add(article.id);
+            existingLink.articleIds.add(article.id);
+            if (relFrames.length > 0) {
+              if (!existingLink.frames) existingLink.frames = [];
+              relFrames.forEach(f => {
+                if (f && !existingLink.frames.includes(f)) {
+                  existingLink.frames.push(f);
+                }
+              });
+            }
           }
         }
       });
@@ -414,6 +427,98 @@ export function BlameNetwork({
       n.communityColor = COMMUNITY_COLORS[cId % COMMUNITY_COLORS.length];
     });
 
+    // Semantic Group/Cluster Naming
+    const articleMap = new Map();
+    (allArticles || []).forEach(a => articleMap.set(a.id, a));
+    (filteredArticles || []).forEach(a => articleMap.set(a.id, a));
+
+    const finalNodeMap = new Map();
+    finalNodes.forEach(n => finalNodeMap.set(n.id, n));
+
+    communities.forEach(comm => {
+      // 1. Gather member nodes
+      const memberNodes = (comm.members || [])
+        .map(id => finalNodeMap.get(id))
+        .filter(Boolean);
+
+      // 2. Find top 1 or 2 core entities with highest degree or rawVal
+      memberNodes.sort((a, b) => {
+        const degDiff = (b.degree || 0) - (a.degree || 0);
+        if (degDiff !== 0) return degDiff;
+        return (b.rawVal || 0) - (a.rawVal || 0);
+      });
+
+      const top1 = memberNodes[0];
+      const top2 = memberNodes[1];
+
+      let coreActor = top1 ? top1.name : `Cluster ${comm.id + 1}`;
+      if (top1 && top2 && memberNodes.length >= 2) {
+        const combined = `${top1.name} & ${top2.name}`;
+        if (combined.length <= 26 && (top2.degree || 0) >= 2) {
+          coreActor = combined;
+        }
+      }
+
+      // 3. Find the most frequent narrative frame
+      const frameCounts = new Map();
+      const memberSet = new Set(comm.members || []);
+
+      finalLinks.forEach(l => {
+        const sId = typeof l.source === 'object' ? l.source.id : l.source;
+        const tId = typeof l.target === 'object' ? l.target.id : l.target;
+        const isS = memberSet.has(sId);
+        const isT = memberSet.has(tId);
+
+        if (isS || isT) {
+          const weight = (isS && isT) ? 2 : 1;
+
+          if (Array.isArray(l.frames)) {
+            l.frames.forEach(f => {
+              if (typeof f === 'string') {
+                const trimmed = f.trim();
+                if (trimmed) frameCounts.set(trimmed, (frameCounts.get(trimmed) || 0) + weight);
+              }
+            });
+          }
+
+          if (l.articleIds) {
+            l.articleIds.forEach(aId => {
+              const art = articleMap.get(aId);
+              if (art && Array.isArray(art.frames)) {
+                art.frames.forEach(f => {
+                  if (typeof f === 'string') {
+                    const trimmed = f.trim();
+                    if (trimmed) frameCounts.set(trimmed, (frameCounts.get(trimmed) || 0) + weight);
+                  }
+                });
+              }
+            });
+          }
+        }
+      });
+
+      // 4. Construct a concise, informative semantic title
+      let dominantFrame = '';
+      if (frameCounts.size > 0) {
+        const sortedFrames = Array.from(frameCounts.entries()).sort((a, b) => b[1] - a[1]);
+        const bestFrame = sortedFrames[0][0];
+
+        if (bestFrame.length > 20) {
+          const segments = bestFrame.split(/[\/:\-—–]/);
+          if (segments.length > 1 && segments[0].trim().length >= 3 && segments[0].trim().length <= 20) {
+            dominantFrame = segments[0].trim();
+          } else {
+            const words = bestFrame.split(/\s+/);
+            dominantFrame = words.slice(0, 3).join(' ');
+          }
+        } else {
+          dominantFrame = bestFrame;
+        }
+      }
+
+      comm.title = dominantFrame ? `${coreActor} · ${dominantFrame}` : `${coreActor} · Faction`;
+    });
+
     return {
       nodes: finalNodes,
       links: finalLinks,
@@ -454,6 +559,7 @@ export function BlameNetwork({
       .filter(comm => comm.members && comm.members.length >= 2)
       .map(comm => ({
         id: comm.id,
+        title: comm.title,
         memberIds: comm.members,
         color: comm.color || COMMUNITY_COLORS[comm.id % COMMUNITY_COLORS.length]
       }));
@@ -525,7 +631,7 @@ export function BlameNetwork({
       const badgeX = sumX / hull.length;
       const badgeY = minHullY - 12;
 
-      const badgeText = `Cluster ${group.id + 1} (${group.memberIds.length} nodes)`;
+      const badgeText = `${group.title || ('Cluster ' + (group.id + 1))} (${group.memberIds.length})`;
       const badgeFontSize = 10 * (exportSettings?.textScale ?? 1.0);
       const fontFam = fontFamily === 'serif' ? '"Times New Roman", Times, serif' : 'Inter, -apple-system, sans-serif';
       ctx.font = `bold ${badgeFontSize}px ${fontFam}`;
@@ -918,16 +1024,17 @@ export function BlameNetwork({
         }}
       >
         {/* Modern HTML Legend Overlay — collapsible, responsive, zero overlap */}
-        <div 
-          className={`absolute top-6 left-6 z-10 bg-white/95 backdrop-blur-md border border-slate-200/90 shadow-sm rounded-xl p-3 max-h-[85vh] overflow-y-auto text-xs select-none transition-all duration-200 ${
-            isLegendCollapsed ? 'w-auto' : 'w-[220px]'
-          }`}
-          style={{ 
-            fontFamily: fontFamily === 'serif' ? '"Times New Roman", Times, serif' : 'Inter, -apple-system, sans-serif',
-            transform: `scale(${exportScale})`,
-            transformOrigin: 'top left'
-          }}
-        >
+        {(!isExporting || (exportSettings?.showLegend ?? true)) && (
+          <div
+            className={`absolute top-6 left-6 z-10 bg-white/95 backdrop-blur-md border border-slate-200/90 shadow-sm rounded-xl p-3 max-h-[85vh] overflow-y-auto text-xs select-none transition-all duration-200 ${
+              isLegendCollapsed ? 'w-auto' : 'w-[220px]'
+            }`}
+            style={{
+              fontFamily: fontFamily === 'serif' ? '"Times New Roman", Times, serif' : 'Inter, -apple-system, sans-serif',
+              transform: `scale(${exportScale})`,
+              transformOrigin: 'top left'
+            }}
+          >
           {/* Legend Header with Collapse Toggle */}
           <div className="flex items-center justify-between font-semibold italic text-slate-700 pb-1 mb-1 border-b border-slate-100 gap-3">
             <span>Legend</span>
@@ -1113,7 +1220,7 @@ export function BlameNetwork({
                             >
                               <span className="w-3.5 h-[3px] rounded-full shrink-0" style={{ backgroundColor: color }} />
                               <span className="text-slate-400 text-[10px] font-mono shrink-0">{`G${i + 1}`}</span>
-                              <span className="truncate flex-1">{topName}</span>
+                              <span className="truncate flex-1" title={comm.title || topName}>{comm.title || comm.name || topName}</span>
                               <span className="text-[9.5px] text-slate-400 font-mono">({comm.members?.length || 0})</span>
                             </div>
                           );
@@ -1204,6 +1311,7 @@ export function BlameNetwork({
             </>
           )}
         </div>
+        )}
 
           {/* DIAGNOSTIC PANEL FOR DEBUGGING */}
           {showDebug && (

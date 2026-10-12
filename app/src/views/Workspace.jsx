@@ -43,6 +43,7 @@ export function Workspace() {
     edgeScale: 1.0,
     arrowScale: 0.5,
     spreadScale: 1.0,
+    showLegend: true
   });
   const hoverTimeoutRef = useRef(null);
   
@@ -1166,19 +1167,28 @@ export function Workspace() {
                   </div>
                   <div className="flex items-center gap-1.5">
                     <span className="text-[10px] font-bold text-slate-400">{t('Arrows')}</span>
-                    <input 
-                      type="range" min="0.1" max="3" step="0.05" 
+                    <input
+                      type="range" min="0.1" max="3" step="0.05"
                       value={exportSettings.arrowScale ?? 0.5}
                       onChange={e => setExportSettings(p => ({...p, arrowScale: parseFloat(e.target.value) || 0.1}))}
                       className="w-14 h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer"
                     />
-                    <input 
-                      type="number" min="0.1" max="3" step="0.05" 
+                    <input
+                      type="number" min="0.1" max="3" step="0.05"
                       value={exportSettings.arrowScale ?? 0.5}
                       onChange={e => setExportSettings(p => ({...p, arrowScale: parseFloat(e.target.value) || 0.1}))}
                       className="w-11 px-1 py-0.5 text-[10px] font-mono font-bold bg-slate-100 border border-slate-200 rounded text-slate-700 text-center focus:outline-none focus:ring-1 focus:ring-rose-400"
                     />
                   </div>
+                  <label className="flex items-center gap-1.5 cursor-pointer ml-1 select-none">
+                    <input
+                      type="checkbox"
+                      checked={exportSettings.showLegend ?? true}
+                      onChange={e => setExportSettings(p => ({ ...p, showLegend: e.target.checked }))}
+                      className="rounded text-rose-500 focus:ring-rose-400 cursor-pointer"
+                    />
+                    <span className="text-[10px] font-bold text-slate-500">{t('Legend in Export')}</span>
+                  </label>
                 </div>
                 </>
               ) : activeView === 'analytics' ? (

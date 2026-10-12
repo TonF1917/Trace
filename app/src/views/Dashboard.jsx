@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store';
-import { Layers, Plus, Settings as SettingsIcon, Trash2, ArrowRight, Sparkles, Loader2, ArrowLeft, AlertCircle, Paperclip, Mail, Key } from 'lucide-react';
+import { Layers, Plus, Settings as SettingsIcon, Trash2, ArrowRight, Sparkles, Loader2, ArrowLeft, AlertCircle, Paperclip, Mail, Key, BookOpen } from 'lucide-react';
 import { generateProjectOntology, aiCompressText, generateTextForTopic } from '../services/LLMService';
 import { parseFile } from '../utils/fileParser';
 import { useTranslation } from 'react-i18next';
+import { TutorialModal } from '../components/TutorialModal';
 
 const LITERATURE_REVIEW_PRESET = {
   name: 'Comparative Literature Review (Multi-Perspective)',
@@ -38,6 +39,7 @@ export function Dashboard() {
   const { projects, createProject, deleteProject, setActiveProject, apiConfig, initializeFromDatabase, loadExampleProject } = useStore();
   
   // Creation States
+  const [isTutorialOpen, setIsTutorialOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [creationStep, setCreationStep] = useState(1);
   const [sourceText, setSourceText] = useState('');
@@ -228,7 +230,15 @@ export function Dashboard() {
             </div>
           </div>
           
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setIsTutorialOpen(true)}
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg font-bold text-sm transition-colors shadow-xs"
+              title={t('Open Built-in Interactive Tutorial')}
+            >
+              <BookOpen className="w-4 h-4 text-rose-600" />
+              <span>{t('Tutorial')}</span>
+            </button>
             <select
               value={i18n.language?.startsWith('zh') ? 'zh' : 'en'}
               onChange={(e) => i18n.changeLanguage(e.target.value)}
@@ -237,13 +247,13 @@ export function Dashboard() {
               <option value="en">EN</option>
               <option value="zh">中文</option>
             </select>
-            <button 
+            <button
               onClick={() => navigate('/settings')}
               className="flex items-center gap-2 px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-bold text-sm transition-colors"
               title={t('Default: FreeLLMAPI (Swappable/Configurable)')}
             >
               <SettingsIcon className="w-4 h-4 text-rose-600" />
-              <span>{apiConfig.provider === 'freellmapi' || !apiConfig.provider ? 'FreeLLMAPI (' + t('Default') + ')' : apiConfig.provider}</span>
+              <span>{apiConfig.provider === 'trace-pool' ? t('Trace Pool (20M)') : (apiConfig.provider === 'freellmapi' || !apiConfig.provider ? 'FreeLLMAPI (' + t('Default') + ')' : apiConfig.provider)}</span>
               <span className="text-[10px] bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded uppercase font-bold">{t('Change API')}</span>
             </button>
           </div>
@@ -624,6 +634,10 @@ export function Dashboard() {
         </footer>
 
       </div>
+
+      {isTutorialOpen && (
+        <TutorialModal onClose={() => setIsTutorialOpen(false)} />
+      )}
     </div>
   );
 }

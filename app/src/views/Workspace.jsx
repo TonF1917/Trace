@@ -1,10 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useStore } from '../store';
-import { ArrowLeft, Plus, Bot, Loader2, Link as LinkIcon, Trash2, ArrowRight } from 'lucide-react';
+import { ArrowLeft, Plus, Bot, Loader2, Link as LinkIcon, Trash2, ArrowRight, BookOpen } from 'lucide-react';
 import { BlameNetwork, DEFAULT_RELATION_COLORS, normalizeRelation } from '../components/BlameNetwork';
 import { TimelineView } from '../components/TimelineView';
 import { MethodModal } from '../components/MethodModal';
+import { TutorialModal } from '../components/TutorialModal';
 import { ViewControls } from '../components/ViewControls';
 import { GraphAnalyticsView } from './GraphAnalyticsView';
 import { analyzeArticle, extractMoreRelationships, generateTextForTopic, connectExistingEntities, consolidateEntities } from '../services/LLMService';
@@ -32,6 +33,7 @@ export function Workspace() {
   const [showFrequencies, setShowFrequencies] = useState(false);
   const [hoveredArticle, setHoveredArticle] = useState(null);
   const [isMethodModalOpen, setIsMethodModalOpen] = useState(false);
+  const [isTutorialOpen, setIsTutorialOpen] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
   const [showResearchForm, setShowResearchForm] = useState(false);
   const [researchTopic, setResearchTopic] = useState('');
@@ -687,7 +689,17 @@ export function Workspace() {
                )}
              </div>
            </div>
-           <button onClick={() => setIsMethodModalOpen(true)} className="text-xs font-bold text-rose-600 hover:underline shrink-0">{t('Method')}</button>
+           <div className="flex items-center gap-2 shrink-0">
+             <button
+               onClick={() => setIsTutorialOpen(true)}
+               className="flex items-center gap-1 px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-md text-xs font-bold transition-colors"
+               title={t('Open Built-in Interactive Tutorial')}
+             >
+               <BookOpen className="w-3.5 h-3.5 text-rose-600" />
+               <span>{t('Tutorial')}</span>
+             </button>
+             <button onClick={() => setIsMethodModalOpen(true)} className="text-xs font-bold text-rose-600 hover:underline shrink-0">{t('Method')}</button>
+           </div>
         </div>
 
         {project.isExample && (
@@ -1211,6 +1223,9 @@ export function Workspace() {
 
       {isMethodModalOpen && (
         <MethodModal onClose={() => setIsMethodModalOpen(false)} />
+      )}
+      {isTutorialOpen && (
+        <TutorialModal onClose={() => setIsTutorialOpen(false)} />
       )}
     </div>
   );

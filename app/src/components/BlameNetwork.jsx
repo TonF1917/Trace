@@ -670,11 +670,11 @@ export function BlameNetwork({
       }
 
       const isGroupActive = activeGroupFilter === group.id && legendGroupMode === 'community';
-      ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${isGroupActive ? 0.22 : 0.035})`;
-      ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${isGroupActive ? 0.85 : 0.30})`;
+      ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${isGroupActive ? 0.26 : 0.12})`;
+      ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${isGroupActive ? 0.92 : 0.58})`;
 
       const edgeScale = exportSettings?.edgeScale || 1;
-      ctx.lineWidth = (isGroupActive ? 2.5 : 1.0) * edgeScale;
+      ctx.lineWidth = (isGroupActive ? 2.8 : 1.8) * edgeScale;
       ctx.lineJoin = 'round';
       if (isGroupActive) {
         ctx.setLineDash([]);
@@ -694,10 +694,7 @@ export function BlameNetwork({
       // When legendGroupMode !== 'community', do not draw community badges
       if (legendGroupMode !== 'community') return;
 
-      // Only draw badges in resting state for major factions (group.memberIds.length >= 3).
-      // Micro-groups (1-2 nodes) do not stamp badges in resting state to keep canvas clean,
-      // but highlight when hovered/active.
-      if (!isGroupActive && (!group.memberIds || group.memberIds.length < 3)) {
+      if (!group.memberIds || group.memberIds.length < 2) {
         return;
       }
 
@@ -706,15 +703,27 @@ export function BlameNetwork({
       let minHullX = Infinity, maxHullX = -Infinity;
       let sumX = 0;
       let apexPt = hull[0];
+      let bottomPt = hull[0];
+      let leftPt = hull[0];
+      let rightPt = hull[0];
       hull.forEach(pt => {
         sumX += pt.x;
         if (pt.y < minHullY) {
           minHullY = pt.y;
           apexPt = pt;
         }
-        if (pt.y > maxHullY) maxHullY = pt.y;
-        if (pt.x < minHullX) minHullX = pt.x;
-        if (pt.x > maxHullX) maxHullX = pt.x;
+        if (pt.y > maxHullY) {
+          maxHullY = pt.y;
+          bottomPt = pt;
+        }
+        if (pt.x < minHullX) {
+          minHullX = pt.x;
+          leftPt = pt;
+        }
+        if (pt.x > maxHullX) {
+          maxHullX = pt.x;
+          rightPt = pt;
+        }
       });
       const centroidX = sumX / hull.length;
 
@@ -722,44 +731,75 @@ export function BlameNetwork({
       const factionLabel = group.factionName || group.title || `Faction ${group.id + 1}`;
       const dominant = group.dominantFrame || '';
       const badgeText = isGroupActive
-        ? (dominant ? `${factionLabel} · ${dominant} (${group.memberIds.length} nodes)` : `${factionLabel} (${group.memberIds.length} nodes)`)
-        : factionLabel;
+        ? (dominant ? `${factionLabel} · ${dominant} (${group.memberIds.length})` : `${factionLabel} (${group.memberIds.length})`)
+        : `${factionLabel} (${group.memberIds.length})`;
       const textScale = exportSettings?.textScale ?? 1.0;
-      const badgeFontSize = (isGroupActive ? 10.5 : 8.5) * textScale;
+      const badgeFontSize = (isGroupActive ? 10.5 : 9.5) * textScale;
       const fontFam = fontFamily === 'serif' ? '"Times New Roman", Times, serif' : 'Inter, -apple-system, sans-serif';
       ctx.font = `${isGroupActive ? 'bold' : '600'} ${badgeFontSize}px ${fontFam}`;
       const textMetrics = ctx.measureText(badgeText);
       const textWidth = textMetrics.width;
-      const pillWidth = textWidth + (isGroupActive ? 16 : 10);
-      const pillHeight = badgeFontSize + (isGroupActive ? 8 : 5);
+      const pillWidth = textWidth + (isGroupActive ? 16 : 12);
+      const pillHeight = badgeFontSize + (isGroupActive ? 8 : 6);
       const pillRadius = pillHeight / 2;
 
-      // Candidate placement positions:
-      // Try placing safely above the apex outside the hull, clamped within hull X span
-      const candidateX = Math.max(minHullX + pillWidth / 2, Math.min(maxHullX - pillWidth / 2, (apexPt.x + centroidX) / 2));
-      const testOffsets = [
-        minHullY - (pillHeight / 2 + 18 * edgeScale),
-        minHullY - (pillHeight / 2 + 30 * edgeScale),
-        minHullY - (pillHeight / 2 + 42 * edgeScale),
-        maxHullY + (pillHeight / 2 + 18 * edgeScale),
-        maxHullY + (pillHeight / 2 + 30 * edgeScale)
+      // Candidate placement positions (above top, below bottom, left, right of hull)
+      const topX = Math.max(minHullX + pillWidth / 2, Math.min(maxHullX - pillWidth / 2, (apexPt.x + centroidX) / 2));
+      const bottomX = Math.max(minHullX + pillWidth / 2, Math.min(maxHullX - pillWidth / 2, (bottomPt.x + centroidX) / 2));
+      const midY = (minHullY + maxHullY) / 2;
+      const candidatePositions = [
+        { x: topX, y: minHullY - (pillHeight / 2 + 16 * edgeScale) },
+        { x: topX, y: minHullY - (pillHeight / 2 + 30 * edgeScale) },
+        { x: centroidX, y: minHullY - (pillHeight / 2 + 22 * edgeScale) },
+        { x: bottomX, y: maxHullY + (pillHeight / 2 + 20 * edgeScale) },
+        { x: bottomX, y: maxHullY + (pillHeight / 2 + 34 * edgeScale) },
+        { x: centroidX, y: maxHullY + (pillHeight / 2 + 26 * edgeScale) },
+        { x: minHullX - (pillWidth / 2 + 14 * edgeScale), y: (leftPt.y + midY) / 2 },
+        { x: minHullX - (pillWidth / 2 + 14 * edgeScale), y: minHullY + pillHeight },
+        { x: minHullX - (pillWidth / 2 + 14 * edgeScale), y: maxHullY - pillHeight },
+        { x: maxHullX + (pillWidth / 2 + 14 * edgeScale), y: (rightPt.y + midY) / 2 },
+        { x: maxHullX + (pillWidth / 2 + 14 * edgeScale), y: minHullY + pillHeight },
+        { x: maxHullX + (pillWidth / 2 + 14 * edgeScale), y: maxHullY - pillHeight },
+        { x: topX, y: minHullY - (pillHeight / 2 + 46 * edgeScale) },
+        { x: bottomX, y: maxHullY + (pillHeight / 2 + 48 * edgeScale) }
       ];
 
-      // Perform node collision check across all nodes in the graph
-      let bestX = candidateX;
-      let bestY = testOffsets[0];
-      for (let i = 0; i < testOffsets.length; i++) {
-        const testY = testOffsets[i];
+      // Perform collision check across all nodes, node labels, and already-placed badges
+      let bestX = candidatePositions[0].x;
+      let bestY = candidatePositions[0].y;
+      for (let i = 0; i < candidatePositions.length; i++) {
+        const { x: testX, y: testY } = candidatePositions[i];
         let collides = false;
+
         for (const n of persistentNodes.current.values()) {
           if (typeof n.x !== 'number' || typeof n.y !== 'number') continue;
-          const nr = (n.academicRadius || 10) * (exportSettings?.nodeScale ?? 0.8) + 14;
-          if (Math.abs(n.x - candidateX) < (pillWidth / 2 + nr) && Math.abs(n.y - testY) < (pillHeight / 2 + nr)) {
+          const nr = (n.academicRadius || 10) * (exportSettings?.nodeScale ?? 0.8) + 12;
+          if (Math.abs(n.x - testX) < (pillWidth / 2 + nr) && Math.abs(n.y - testY) < (pillHeight / 2 + nr)) {
+            collides = true;
+            break;
+          }
+          const nLabelY = n.y + nr + 8 * textScale;
+          const nLabelHalfW = Math.min(48, (n.name || '').length * 3.2) * textScale;
+          const nLabelHalfH = 10 * textScale;
+          if (Math.abs(n.x - testX) < (pillWidth / 2 + nLabelHalfW + 4) && Math.abs(nLabelY - testY) < (pillHeight / 2 + nLabelHalfH + 4)) {
             collides = true;
             break;
           }
         }
+
         if (!collides) {
+          for (const rect of labelOccupiedRects.current) {
+            const rHalfW = (rect.width || 60 * textScale) / 2;
+            const rHalfH = (rect.height || 20 * textScale) / 2;
+            if (Math.abs(rect.x - testX) < (pillWidth / 2 + rHalfW + 6) && Math.abs(rect.y - testY) < (pillHeight / 2 + rHalfH + 6)) {
+              collides = true;
+              break;
+            }
+          }
+        }
+
+        if (!collides) {
+          bestX = testX;
           bestY = testY;
           break;
         }
@@ -768,8 +808,8 @@ export function BlameNetwork({
       const pillX = bestX - pillWidth / 2;
       const pillY = bestY - pillHeight / 2;
 
-      // Register badge occupied rect so edge labels avoid drawing over the faction badge
-      labelOccupiedRects.current.push({ x: bestX, y: bestY });
+      // Register badge occupied rect so other faction badges and edge labels avoid drawing over it
+      labelOccupiedRects.current.push({ x: bestX, y: bestY, width: pillWidth, height: pillHeight });
 
       ctx.save();
       ctx.setLineDash([]);

@@ -60,6 +60,7 @@ export function Workspace() {
   const [showCurvedEdges, setShowCurvedEdges] = useState(true);
   const [fontFamily, setFontFamily] = useState('serif');
   const [showDebug, setShowDebug] = useState(false);
+  const [legendGroupMode, setLegendGroupMode] = useState('community');
 
   useEffect(() => {
     if (project) {
@@ -1016,7 +1017,7 @@ export function Workspace() {
               </button>
             </div>
             {activeView === 'topology' && (
-                <ViewControls 
+                <ViewControls
                   graphMode={graphMode}
                   setGraphMode={setGraphMode}
                   showSourceNodes={showSourceNodes}
@@ -1031,6 +1032,8 @@ export function Workspace() {
                   setFontFamily={setFontFamily}
                   showDebug={showDebug}
                   setShowDebug={setShowDebug}
+                  legendGroupMode={legendGroupMode}
+                  setLegendGroupMode={setLegendGroupMode}
                 />
             )}
           </div>
@@ -1071,11 +1074,11 @@ export function Workspace() {
             <div className="flex-1 relative">
               {activeView === 'topology' ? (
                 <>
-                <BlameNetwork 
+                <BlameNetwork
                   allArticles={processedArticles}
-                  filteredArticles={filteredProcessedArticles} 
-                  sources={uniqueSources} 
-                  hoveredArticle={hoveredArticle} 
+                  filteredArticles={filteredProcessedArticles}
+                  sources={uniqueSources}
+                  hoveredArticle={hoveredArticle}
                   showSourceNodes={showSourceNodes}
                   showFrequencies={showFrequencies}
                   showGroupEnclosures={showGroupEnclosures}
@@ -1083,6 +1086,8 @@ export function Workspace() {
                   fontFamily={fontFamily}
                   showDebug={showDebug}
                   graphMode={graphMode}
+                  legendGroupMode={legendGroupMode}
+                  setLegendGroupMode={setLegendGroupMode}
                   relationColors={project.relationColors || {}}
                   isExporting={isExporting}
                   exportSettings={exportSettings}

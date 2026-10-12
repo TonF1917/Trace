@@ -55,7 +55,26 @@ const getConvexHull = (points) => {
   return lower.concat(upper);
 };
 
-export function BlameNetwork({ allArticles, filteredArticles, sources, hoveredArticle, showSourceNodes, showFrequencies, showGroupEnclosures = true, showCurvedEdges = true, fontFamily = 'serif', showDebug = false, relationColors = {}, onColorChange, isExporting = false, exportSettings = { nodeScale: 0.8, textScale: 1.0, edgeScale: 1.0, arrowScale: 0.5, spreadScale: 1.0 }, graphMode = 'explore', onLinkSelected }) {
+export function BlameNetwork({
+  allArticles,
+  filteredArticles,
+  sources,
+  hoveredArticle,
+  showSourceNodes,
+  showFrequencies,
+  showGroupEnclosures = true,
+  showCurvedEdges = true,
+  fontFamily = 'serif',
+  showDebug = false,
+  relationColors = {},
+  onColorChange,
+  isExporting = false,
+  exportSettings = { nodeScale: 0.8, textScale: 1.0, edgeScale: 1.0, arrowScale: 0.5, spreadScale: 1.0 },
+  graphMode = 'explore',
+  legendGroupMode: propLegendGroupMode,
+  setLegendGroupMode: propSetLegendGroupMode,
+  onLinkSelected
+}) {
   const RELATION_COLORS = useMemo(() => ({ ...DEFAULT_RELATION_COLORS, ...relationColors }), [relationColors]);
   const containerRef = useRef(null);
   // Reference to the ForceGraph component
@@ -67,8 +86,10 @@ export function BlameNetwork({ allArticles, filteredArticles, sources, hoveredAr
   const [selectedCommunity, setSelectedCommunity] = useState(null);
   // Hovered group from legend hover interaction
   const [hoveredGroup, setHoveredGroup] = useState(null);
-  // Legend View Modes: 'community' | 'centrality' | 'stance'
-  const [legendGroupMode, setLegendGroupMode] = useState('community');
+  // Legend View Modes: 'community' | 'centrality' | 'stance' | 'none'
+  const [internalLegendGroupMode, setInternalLegendGroupMode] = useState('community');
+  const legendGroupMode = propLegendGroupMode !== undefined ? propLegendGroupMode : internalLegendGroupMode;
+  const setLegendGroupMode = propSetLegendGroupMode || setInternalLegendGroupMode;
   // Collapsible legend toggle
   const [isLegendCollapsed, setIsLegendCollapsed] = useState(false);
   // Per-frame label collision list — cleared at frame start, populated as labels are drawn
@@ -475,11 +496,11 @@ export function BlameNetwork({ allArticles, filteredArticles, sources, hoveredAr
       }
 
       const isGroupActive = activeGroupFilter === group.id && legendGroupMode === 'community';
-      ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${isGroupActive ? 0.18 : 0.05})`;
-      ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${isGroupActive ? 0.85 : 0.25})`;
+      ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${isGroupActive ? 0.28 : 0.14})`;
+      ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${isGroupActive ? 0.90 : 0.60})`;
 
       const edgeScale = exportSettings?.edgeScale || 1;
-      ctx.lineWidth = (isGroupActive ? 3.0 : 1.5) * edgeScale;
+      ctx.lineWidth = (isGroupActive ? 3.0 : 2.0) * edgeScale;
       ctx.lineJoin = 'round';
       ctx.setLineDash([5 * edgeScale, 5 * edgeScale]);
 
@@ -491,9 +512,53 @@ export function BlameNetwork({ allArticles, filteredArticles, sources, hoveredAr
       ctx.closePath();
       ctx.fill();
       ctx.stroke();
+
+      // Render a clean floating pill badge / label at the top of each convex hull
+      let minHullY = Infinity;
+      let sumX = 0;
+      hull.forEach(pt => {
+        sumX += pt.x;
+        if (pt.y < minHullY) {
+          minHullY = pt.y;
+        }
+      });
+      const badgeX = sumX / hull.length;
+      const badgeY = minHullY - 12;
+
+      const badgeText = `Cluster ${group.id + 1} (${group.memberIds.length} nodes)`;
+      const badgeFontSize = 10 * (exportSettings?.textScale ?? 1.0);
+      const fontFam = fontFamily === 'serif' ? '"Times New Roman", Times, serif' : 'Inter, -apple-system, sans-serif';
+      ctx.font = `bold ${badgeFontSize}px ${fontFam}`;
+      const textMetrics = ctx.measureText(badgeText);
+      const textWidth = textMetrics.width;
+      const pillWidth = textWidth + 14;
+      const pillHeight = badgeFontSize + 8;
+      const pillRadius = pillHeight / 2;
+      const pillX = badgeX - pillWidth / 2;
+      const pillY = badgeY - pillHeight / 2;
+
+      ctx.save();
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      if (typeof ctx.roundRect === 'function') {
+        ctx.roundRect(pillX, pillY, pillWidth, pillHeight, pillRadius);
+      } else {
+        ctx.rect(pillX, pillY, pillWidth, pillHeight);
+      }
+      ctx.fillStyle = isGroupActive ? `rgba(${r}, ${g}, ${b}, 0.95)` : 'rgba(255, 255, 255, 0.92)';
+      ctx.fill();
+      ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${isGroupActive ? 1.0 : 0.8})`;
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = isGroupActive ? '#ffffff' : '#1e293b';
+      ctx.fillText(badgeText, badgeX, badgeY);
+      ctx.restore();
     });
     ctx.restore();
-  }, [enclosureGroups, showGroupEnclosures, exportSettings, persistentNodes]);
+  }, [enclosureGroups, showGroupEnclosures, exportSettings, persistentNodes, activeGroupFilter, legendGroupMode, fontFamily]);
 
   const [hasInitialized, setHasInitialized] = useState(false);
 
@@ -599,7 +664,22 @@ export function BlameNetwork({ allArticles, filteredArticles, sources, hoveredAr
       ctx.globalAlpha = Math.max(0.28, effectiveAlpha);
       ctx.beginPath();
       ctx.arc(node.x, node.y, nodeRadius, 0, 2 * Math.PI, false);
-      ctx.fillStyle = node.color || '#94a3b8';
+
+      // Dynamic Node Fill Colors based on active group mode (solving uniform slate-grey flaw)
+      if (node.group === 'source') {
+        ctx.fillStyle = node.color || '#cbd5e1';
+      } else if (legendGroupMode === 'community') {
+        ctx.fillStyle = node.communityColor || node.color || '#94a3b8';
+      } else if (legendGroupMode === 'centrality') {
+        ctx.fillStyle = (node.degree >= 5 ? '#6366f1' : ((node.degree >= 3) ? '#0d9488' : '#94a3b8'));
+      } else if (legendGroupMode === 'stance') {
+        ctx.fillStyle = (node.outDegree > node.inDegree ? '#e11d48' : (node.inDegree > node.outDegree ? '#d97706' : '#0284c7'));
+      } else if (legendGroupMode === 'none') {
+        ctx.fillStyle = node.color || '#64748b';
+      } else {
+        ctx.fillStyle = node.communityColor || node.color || '#94a3b8';
+      }
+
       ctx.fill();
       ctx.strokeStyle = isGroupDimmed ? '#cbd5e1' : (activeGroupFilter !== null && !isGroupDimmed ? '#0284c7' : '#334155');
       ctx.lineWidth = activeGroupFilter !== null && !isGroupDimmed ? 2.5 : 1;
@@ -989,6 +1069,15 @@ export function BlameNetwork({ allArticles, filteredArticles, sources, hoveredAr
                     >
                       Stance
                     </button>
+                    <button
+                      onClick={() => { setLegendGroupMode('none'); setSelectedCommunity(null); }}
+                      className={`flex-1 py-0.5 text-center rounded transition-all cursor-pointer ${
+                        legendGroupMode === 'none' ? 'bg-white shadow-2xs font-bold text-slate-800' : 'text-slate-500 hover:text-slate-700'
+                      }`}
+                      title="Uniform single color for all nodes"
+                    >
+                      Uniform
+                    </button>
                   </div>
                 )}
 
@@ -1035,9 +1124,9 @@ export function BlameNetwork({ allArticles, filteredArticles, sources, hoveredAr
 
                   if (legendGroupMode === 'centrality') {
                     const centralityItems = [
-                      { id: 'hubs', label: 'Hubs (核心节点)', color: '#0284c7', count: (graphData.nodes || []).filter(n => (n.degree || 1) >= 5).length },
-                      { id: 'bridges', label: 'Bridges (桥接节点)', color: '#059669', count: (graphData.nodes || []).filter(n => (n.degree || 1) >= 3 && (n.degree || 1) <= 4).length },
-                      { id: 'periphery', label: 'Periphery (边缘节点)', color: '#94a3b8', count: (graphData.nodes || []).filter(n => (n.degree || 1) <= 2).length },
+                      { id: 'hubs', label: 'Hubs (核心节点, d≥5)', color: '#6366f1', count: (graphData.nodes || []).filter(n => (n.degree || 1) >= 5).length },
+                      { id: 'bridges', label: 'Bridges (桥接节点, d=3~4)', color: '#0d9488', count: (graphData.nodes || []).filter(n => (n.degree || 1) >= 3 && (n.degree || 1) <= 4).length },
+                      { id: 'periphery', label: 'Periphery (边缘节点, d≤2)', color: '#94a3b8', count: (graphData.nodes || []).filter(n => (n.degree || 1) <= 2).length },
                     ];
                     return (
                       <div className="space-y-0.5 mt-1">
@@ -1067,9 +1156,9 @@ export function BlameNetwork({ allArticles, filteredArticles, sources, hoveredAr
 
                   if (legendGroupMode === 'stance') {
                     const stanceItems = [
-                      { id: 'blamers', label: 'Accusers / Blamers (指控方)', color: '#dc2626', count: (graphData.nodes || []).filter(n => (n.outDegree || 0) > (n.inDegree || 0)).length },
-                      { id: 'targets', label: 'Targets / Accused (受指控方)', color: '#2563eb', count: (graphData.nodes || []).filter(n => (n.inDegree || 0) > (n.outDegree || 0)).length },
-                      { id: 'neutral', label: 'Dual / Neutral (中立/双向)', color: '#7c3aed', count: (graphData.nodes || []).filter(n => (n.inDegree || 0) === (n.outDegree || 0)).length },
+                      { id: 'blamers', label: 'Accusers / Blamers (指控方)', color: '#e11d48', count: (graphData.nodes || []).filter(n => (n.outDegree || 0) > (n.inDegree || 0)).length },
+                      { id: 'targets', label: 'Targets / Accused (受指控方)', color: '#d97706', count: (graphData.nodes || []).filter(n => (n.inDegree || 0) > (n.outDegree || 0)).length },
+                      { id: 'neutral', label: 'Dual / Neutral (中立/双向)', color: '#0284c7', count: (graphData.nodes || []).filter(n => (n.inDegree || 0) === (n.outDegree || 0)).length },
                     ];
                     return (
                       <div className="space-y-0.5 mt-1">
@@ -1096,6 +1185,19 @@ export function BlameNetwork({ allArticles, filteredArticles, sources, hoveredAr
                       </div>
                     );
                   }
+
+                  if (legendGroupMode === 'none') {
+                    return (
+                      <div className="space-y-0.5 mt-1 px-1.5 py-1 text-[11px] text-slate-500 bg-slate-50 rounded">
+                        <div className="flex items-center gap-2">
+                          <span className="w-3 h-3 rounded-full shrink-0 border border-slate-300 bg-slate-500" />
+                          <span className="truncate flex-1 font-medium">Uniform / 单色 (#64748b)</span>
+                          <span className="text-[9.5px] text-slate-400 font-mono">({(graphData.nodes || []).length})</span>
+                        </div>
+                      </div>
+                    );
+                  }
+
                   return null;
                 })()}
               </div>

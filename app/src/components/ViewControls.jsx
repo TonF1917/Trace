@@ -1,39 +1,98 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 
-export function ViewControls({ 
+export function ViewControls({
   graphMode, setGraphMode,
   showSourceNodes, setShowSourceNodes,
   showFrequencies, setShowFrequencies,
   showGroupEnclosures, setShowGroupEnclosures,
   showCurvedEdges, setShowCurvedEdges,
   fontFamily, setFontFamily,
-  showDebug, setShowDebug
+  showDebug, setShowDebug,
+  legendGroupMode = 'community', setLegendGroupMode
 }) {
   const { t } = useTranslation();
 
   return (
-    <div className="flex items-center ml-2 bg-white rounded-lg shadow-sm border border-slate-200 p-1">
-      <div className="flex bg-slate-100 p-0.5 rounded-md mr-3">
-        <button 
+    <div className="flex items-center ml-2 bg-white rounded-lg shadow-sm border border-slate-200 p-1 flex-wrap gap-y-1">
+      {/* Interaction Mode: Explore / Manual / Figure */}
+      <div className="flex bg-slate-100 p-0.5 rounded-md mr-2">
+        <button
           onClick={() => setGraphMode('explore')}
           className={`px-3 py-1 text-xs font-bold rounded transition-all ${graphMode === 'explore' ? 'bg-white shadow-sm text-purple-600' : 'text-slate-500 hover:text-slate-700'}`}
         >
           {t('Explore')}
         </button>
-        <button 
+        <button
           onClick={() => setGraphMode('manual')}
           className={`px-3 py-1 text-xs font-bold rounded transition-all ${graphMode === 'manual' ? 'bg-white shadow-sm text-amber-600' : 'text-slate-500 hover:text-slate-700'}`}
           title={t('Drag nodes to pin them. Click a pinned node to unpin.')}
         >
           {t('Manual')}
         </button>
-        <button 
+        <button
           onClick={() => setGraphMode('figure')}
           className={`px-3 py-1 text-xs font-bold rounded transition-all ${graphMode === 'figure' ? 'bg-white shadow-sm text-purple-600' : 'text-slate-500 hover:text-slate-700'}`}
         >
           {t('Figure')}
         </button>
+      </div>
+
+      {/* Group Mode (分组视图) Selector */}
+      <div className="flex items-center gap-1.5 px-2 border-l border-slate-200">
+        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider shrink-0">
+          {t('Grouping')}:
+        </span>
+        <div className="flex bg-slate-100 p-0.5 rounded-md gap-0.5">
+          <button
+            type="button"
+            onClick={() => setLegendGroupMode && setLegendGroupMode('community')}
+            className={`px-2 py-0.5 text-xs font-bold rounded transition-all ${
+              legendGroupMode === 'community'
+                ? 'bg-white shadow-xs text-indigo-600'
+                : 'text-slate-500 hover:text-slate-700'
+            }`}
+            title={t('Group by community detection algorithm (Louvain clustering)')}
+          >
+            {t('Louvain')}
+          </button>
+          <button
+            type="button"
+            onClick={() => setLegendGroupMode && setLegendGroupMode('centrality')}
+            className={`px-2 py-0.5 text-xs font-bold rounded transition-all ${
+              legendGroupMode === 'centrality'
+                ? 'bg-white shadow-xs text-teal-600'
+                : 'text-slate-500 hover:text-slate-700'
+            }`}
+            title={t('Group by network centrality tiers (Hubs, Bridges, Periphery)')}
+          >
+            {t('Centrality')}
+          </button>
+          <button
+            type="button"
+            onClick={() => setLegendGroupMode && setLegendGroupMode('stance')}
+            className={`px-2 py-0.5 text-xs font-bold rounded transition-all ${
+              legendGroupMode === 'stance'
+                ? 'bg-white shadow-xs text-rose-600'
+                : 'text-slate-500 hover:text-slate-700'
+            }`}
+            title={t('Group by actor blame stance (Accusers, Targets, Neutral)')}
+          >
+            {t('Stance')}
+          </button>
+          <button
+            type="button"
+            onClick={() => setLegendGroupMode && setLegendGroupMode('none')}
+            className={`px-2 py-0.5 text-xs font-bold rounded transition-all ${
+              legendGroupMode === 'none'
+                ? 'bg-white shadow-xs text-slate-700'
+                : 'text-slate-500 hover:text-slate-700'
+            }`}
+            title={t('Uniform node colors without grouping')}
+          >
+            {t('Uniform')}
+          </button>
+        </div>
       </div>
 
       <div className="flex items-center gap-3 px-2 border-l border-slate-200">

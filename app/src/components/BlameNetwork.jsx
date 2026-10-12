@@ -55,7 +55,7 @@ const getConvexHull = (points) => {
   return lower.concat(upper);
 };
 
-export function BlameNetwork({ allArticles, filteredArticles, sources, hoveredArticle, showSourceNodes, showFrequencies, showGroupEnclosures = true, showCurvedEdges = true, fontFamily = 'serif', showDebug = false, relationColors = {}, onColorChange, isExporting = false, exportSettings = { nodeScale: 1.9, textScale: 1.25, edgeScale: 1.0, arrowScale: 0.5, spreadScale: 0.8 }, graphMode = 'explore', onLinkSelected }) {
+export function BlameNetwork({ allArticles, filteredArticles, sources, hoveredArticle, showSourceNodes, showFrequencies, showGroupEnclosures = true, showCurvedEdges = true, fontFamily = 'serif', showDebug = false, relationColors = {}, onColorChange, isExporting = false, exportSettings = { nodeScale: 0.8, textScale: 1.0, edgeScale: 1.0, arrowScale: 0.5, spreadScale: 1.0 }, graphMode = 'explore', onLinkSelected }) {
   const RELATION_COLORS = useMemo(() => ({ ...DEFAULT_RELATION_COLORS, ...relationColors }), [relationColors]);
   const containerRef = useRef(null);
   // Reference to the ForceGraph component
@@ -143,7 +143,14 @@ export function BlameNetwork({ allArticles, filteredArticles, sources, hoveredAr
         if (showSourceNodes) {
           if (!currentNodesMap.has(sourceNodeId)) {
             if (!persistentNodes.current.has(sourceNodeId)) {
-              persistentNodes.current.set(sourceNodeId, { id: sourceNodeId, group: 'source' });
+              const angle = currentNodesMap.size * 2.39996;
+              const dist = 120 + currentNodesMap.size * 18;
+              persistentNodes.current.set(sourceNodeId, {
+                id: sourceNodeId,
+                group: 'source',
+                x: Math.cos(angle) * dist,
+                y: Math.sin(angle) * dist
+              });
             }
             const sourceInfo = sources.find(s => s.id === article.source_id);
             const sourceNode = persistentNodes.current.get(sourceNodeId);
@@ -157,20 +164,22 @@ export function BlameNetwork({ allArticles, filteredArticles, sources, hoveredAr
         if (!currentNodesMap.has(mainActorId)) {
           const existingNode = persistentNodes.current.get(mainActorId);
           if (!existingNode || typeof existingNode.x !== 'number' || !isFinite(existingNode.x) || Math.abs(existingNode.x) > 5000) {
-            persistentNodes.current.set(mainActorId, { 
-              id: mainActorId, 
+            const angle = currentNodesMap.size * 2.39996;
+            const dist = 120 + currentNodesMap.size * 18;
+            persistentNodes.current.set(mainActorId, {
+              id: mainActorId,
               group: 'actor',
-              x: Math.random() * 10 - 5,
-              y: Math.random() * 10 - 5
+              x: Math.cos(angle) * dist,
+              y: Math.sin(angle) * dist
             });
           }
           const actorNode = persistentNodes.current.get(mainActorId);
           actorNode.name = rawActor;
-          actorNode.color = '#64748b'; 
+          actorNode.color = '#64748b';
           const freq = entityFrequencies[normalizeEntity(rawActor)] || 1;
-          const baseRadius = Math.max(6, 6 * Math.sqrt(freq)); 
+          const baseRadius = Math.max(6, 6 * Math.sqrt(freq));
           actorNode.academicRadius = baseRadius;
-          actorNode.val = baseRadius * baseRadius; 
+          actorNode.val = baseRadius * baseRadius;
           actorNode.rawVal = freq;
           currentNodesMap.set(mainActorId, actorNode);
         }
@@ -178,11 +187,13 @@ export function BlameNetwork({ allArticles, filteredArticles, sources, hoveredAr
         if (!currentNodesMap.has(blameTargetId)) {
           const existingNode = persistentNodes.current.get(blameTargetId);
           if (!existingNode || typeof existingNode.x !== 'number' || !isFinite(existingNode.x) || Math.abs(existingNode.x) > 5000) {
-            persistentNodes.current.set(blameTargetId, { 
-              id: blameTargetId, 
+            const angle = currentNodesMap.size * 2.39996;
+            const dist = 120 + currentNodesMap.size * 18;
+            persistentNodes.current.set(blameTargetId, {
+              id: blameTargetId,
               group: 'target',
-              x: Math.random() * 10 - 5,
-              y: Math.random() * 10 - 5
+              x: Math.cos(angle) * dist,
+              y: Math.sin(angle) * dist
             });
           }
           const targetNode = persistentNodes.current.get(blameTargetId);
@@ -443,7 +454,7 @@ export function BlameNetwork({ allArticles, filteredArticles, sources, hoveredAr
       group.memberIds.forEach(mId => {
         const node = nodeMap.get(mId);
         if (node && typeof node.x === 'number' && typeof node.y === 'number') {
-          const r = (node.academicRadius || 10) * (exportSettings?.nodeScale || 1) + 16;
+          const r = (node.academicRadius || 10) * (exportSettings?.nodeScale ?? 0.8) + 16;
           points.push({ x: node.x, y: node.y - r });
           points.push({ x: node.x, y: node.y + r });
           points.push({ x: node.x - r, y: node.y });
@@ -489,36 +500,39 @@ export function BlameNetwork({ allArticles, filteredArticles, sources, hoveredAr
   useEffect(() => {
     if (graphData.nodes.length > 0 && dimensions.width > 0 && dimensions.height > 0 && fgRef.current) {
       try {
-        const spread = exportSettings?.spreadScale ?? 0.8;
-        const nodeScale = exportSettings?.nodeScale || 1.9;
-        const textScale = exportSettings?.textScale || 1.25;
+        const spread = exportSettings?.spreadScale ?? 1.0;
+        const nodeScale = exportSettings?.nodeScale ?? 0.8;
+        const textScale = exportSettings?.textScale ?? 1.0;
 
-        // 1. Scaled collision radius based on node radius + text padding
+        // 1. Scaled text-aware collision radius: node radius + label height & width + degree buffer
         fgRef.current.d3Force('collide', forceCollide().radius(n => {
           const r = (n.academicRadius || 10) * nodeScale;
-          return r + 28 * textScale;
+          const collisionPadding = 38 * textScale;
+          return r + collisionPadding + Math.min(20, (n.degree || 1) * 3);
         }).strength(1.0).iterations(10));
 
-        // 2. Strong degree-weighted repulsion so hubs & large nodes never overlap
+        // 2. Strong degree-weighted repulsion so hubs & dense clusters have ample breathing room
         const chargeForce = fgRef.current.d3Force('charge');
         if (chargeForce && typeof chargeForce.strength === 'function') {
           chargeForce.strength(n => {
             const deg = n.degree || 1;
             const r = (n.academicRadius || 10) * nodeScale;
-            return (-500 - 150 * Math.log2(1 + deg) - 15 * r) * spread;
+            return (-650 - 180 * Math.log2(1 + deg) - 20 * r) * spread;
           });
         }
 
-        // 3. Link distance guaranteed to exceed the sum of radii of connected nodes + padding
+        // 3. Community-aware link distance: tighter for intra-community, wider for inter-community
         const linkForce = fgRef.current.d3Force('link');
         if (linkForce && typeof linkForce.distance === 'function') {
           linkForce.distance(link => {
             const sNode = typeof link.source === 'object' ? link.source : {};
             const tNode = typeof link.target === 'object' ? link.target : {};
+            const isSameCommunity = sNode.communityId !== undefined && tNode.communityId !== undefined && sNode.communityId === tNode.communityId;
+            const baseDist = isSameCommunity ? 85 : 150;
             const sR = (sNode.academicRadius || 10) * nodeScale;
             const tR = (tNode.academicRadius || 10) * nodeScale;
-            const maxDeg = Math.max(sNode.degree || 1, tNode.degree || 1);
-            return Math.max(110 * spread, (sR + tR + 55 * textScale + 8 * Math.min(maxDeg, 8)) * spread);
+            const minRadiiDist = sR + tR + 40 * textScale;
+            return Math.max(baseDist * spread, minRadiiDist * spread);
           });
         }
 
@@ -578,7 +592,7 @@ export function BlameNetwork({ allArticles, filteredArticles, sources, hoveredAr
       const alpha = isHighlighted ? 1 : 0.15;
       // Apply group dimming on top of highlight alpha
       const effectiveAlpha = isGroupDimmed ? Math.min(alpha, 0.08) : alpha;
-      const nodeRadius = (node.academicRadius || 10) * (exportSettings?.nodeScale || 1);
+      const nodeRadius = (node.academicRadius || 10) * (exportSettings?.nodeScale ?? 0.8);
       const safeName = node.name || 'Unknown';
       const label = showFrequencies && node.group !== 'source' ? `${safeName} (${node.rawVal || 0})` : safeName;
 
@@ -591,77 +605,63 @@ export function BlameNetwork({ allArticles, filteredArticles, sources, hoveredAr
       ctx.lineWidth = activeGroupFilter !== null && !isGroupDimmed ? 2.5 : 1;
       ctx.stroke();
 
-        const shouldDrawLabel = true;
-        // Hub nodes (degree ≥ 4) always show their label.
-        // Leaf nodes skip if another label is within 30 screen-px to prevent clutter.
-        const nodeDegree = node.degree || 1;
-        const isHub = nodeDegree >= 4;
-        if ((!isFilteredOut || alpha > 0.05) && shouldDrawLabel) {
-          const sizeRatio = Math.max(0.75, Math.min(1.8, nodeRadius / 15));
-          const baseFontSize = node.group === 'source' ? 12 : (10 * sizeRatio);
-          const fontSize = baseFontSize * (exportSettings?.textScale || 1);
-          const fontFam = fontFamily === 'serif' ? '"Times New Roman", Times, serif' : 'Inter, -apple-system, sans-serif';
-          const fontWeight = isHighlighted ? 'bold' : (sizeRatio > 1.2 ? 'bold' : 'normal');
-          ctx.font = `${fontWeight} ${fontSize}px ${fontFam}`;
-          
-          const words = label.split(' ');
-          const lines = [];
-          let currentLine = '';
-          words.forEach(word => {
-            const testLine = currentLine ? currentLine + ' ' + word : word;
-            if (currentLine && testLine.length > 20) {
-              lines.push(currentLine);
-              currentLine = word;
-            } else {
-              currentLine = testLine;
-            }
-          });
-          if (currentLine) lines.push(currentLine);
-          
-          const lineHeight = fontSize * 1.25;
-          const textX = node.x;
-          const startTextY = node.y + nodeRadius + 6 * (exportSettings?.textScale || 1);
-          // Label center for collision detection (midpoint of all text lines)
-          const labelCenterY = startTextY + (lines.length - 1) * lineHeight / 2;
+      const shouldDrawLabel = true;
+      if ((!isFilteredOut || alpha > 0.05) && shouldDrawLabel) {
+        const textScale = exportSettings?.textScale ?? 1.0;
+        const sizeRatio = Math.max(0.75, Math.min(1.8, nodeRadius / 15));
+        const baseFontSize = node.group === 'source' ? 12 : (10 * sizeRatio);
+        const fontSize = baseFontSize * textScale;
+        const fontFam = fontFamily === 'serif' ? '"Times New Roman", Times, serif' : 'Inter, -apple-system, sans-serif';
+        const fontWeight = isHighlighted ? 'bold' : (sizeRatio > 1.2 ? 'bold' : 'normal');
+        ctx.font = `${fontWeight} ${fontSize}px ${fontFam}`;
 
-          // Per-frame label collision check (shared list with edge labels)
-          // globalScale is NOT available here; store raw canvas coords.
-          // Use a fixed 35-unit canvas distance threshold as proxy.
-          const occupied = labelOccupiedRects.current;
-          const LABEL_CANVAS_DIST = 35; // approximate canvas units for 30 screen-px at default zoom
-          const tooClose = occupied.some(p =>
-            Math.hypot(p.x - textX, p.y - labelCenterY) < LABEL_CANVAS_DIST
-          );
-
-          // Skip low-degree nodes that would overlap; always draw hubs
-          if (!tooClose || isHub) {
-            occupied.push({ x: textX, y: labelCenterY });
-
-            ctx.globalAlpha = (isFilteredOut || isGroupDimmed) ? 0.06 : effectiveAlpha;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'top';
-
-            // White stroke halo to isolate label text from background edge lines
-            ctx.strokeStyle = '#ffffff';
-            ctx.lineWidth = 8 * (exportSettings?.textScale || 1);
-            ctx.lineJoin = 'round';
-            ctx.miterLimit = 2;
-
-            lines.forEach((line, i) => {
-              const y = startTextY + (i * lineHeight);
-              ctx.strokeText(line, textX, y);
-            });
-
-            ctx.fillStyle = isHighlighted ? '#0f172a' : '#334155';
-            lines.forEach((line, i) => {
-              const y = startTextY + (i * lineHeight);
-              ctx.fillText(line, textX, y);
-            });
+        const words = label.split(' ');
+        const lines = [];
+        let currentLine = '';
+        words.forEach(word => {
+          const testLine = currentLine ? currentLine + ' ' + word : word;
+          if (currentLine && testLine.length > 20) {
+            lines.push(currentLine);
+            currentLine = word;
+          } else {
+            currentLine = testLine;
           }
-          
-          ctx.shadowBlur = 0;
-        }
-      ctx.globalAlpha = 1; 
+        });
+        if (currentLine) lines.push(currentLine);
+
+        const lineHeight = fontSize * 1.25;
+        const textX = node.x;
+        const startTextY = node.y + nodeRadius + 6 * textScale;
+        // Label center for collision avoidance
+        const labelCenterY = startTextY + (lines.length - 1) * lineHeight / 2;
+
+        // Register node label position so edge labels avoid drawing over node text
+        labelOccupiedRects.current.push({ x: textX, y: labelCenterY });
+
+        ctx.globalAlpha = (isFilteredOut || isGroupDimmed) ? 0.06 : effectiveAlpha;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+
+        // White stroke halo to isolate label text cleanly from edges and background
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 6 * textScale;
+        ctx.lineJoin = 'round';
+        ctx.miterLimit = 2;
+
+        lines.forEach((line, i) => {
+          const y = startTextY + (i * lineHeight);
+          ctx.strokeText(line, textX, y);
+        });
+
+        ctx.fillStyle = isHighlighted ? '#0f172a' : '#334155';
+        lines.forEach((line, i) => {
+          const y = startTextY + (i * lineHeight);
+          ctx.fillText(line, textX, y);
+        });
+
+        ctx.shadowBlur = 0;
+      }
+      ctx.globalAlpha = 1;
     } catch (err) {
       console.error('Canvas rendering error:', err);
     }
@@ -700,7 +700,7 @@ export function BlameNetwork({ allArticles, filteredArticles, sources, hoveredAr
     const dx = end.x - start.x;
     const dy = end.y - start.y;
     const dist = Math.hypot(dx, dy);
-    const scale = exportSettings?.nodeScale || 1;
+    const scale = exportSettings?.nodeScale ?? 0.8;
 
     // If nodes are too close, skip rendering to avoid clutter
     if (dist < 50 * scale) return;
@@ -739,7 +739,7 @@ export function BlameNetwork({ allArticles, filteredArticles, sources, hoveredAr
 
     const relLabel = link.label.split(/[\s/]/)[0]; // Extract 'Opposes' from 'Opposes / Blames'
 
-    const textScale = exportSettings?.textScale || 1.25;
+    const textScale = exportSettings?.textScale ?? 1.0;
 
     // --- Strict Edge Label Avoidance ---
     // 1. Skip if edge label lands inside any node circle or near any node text label
@@ -1171,8 +1171,8 @@ export function BlameNetwork({ allArticles, filteredArticles, sources, hoveredAr
             onLinkClick={handleLinkClick}
             onEngineStop={handleEngineStop}
             cooldownTicks={200}
-            d3AlphaDecay={0.02}
-            d3VelocityDecay={0.3}
+            d3AlphaDecay={0.022}
+            d3VelocityDecay={0.35}
           />
         ) : (
           <div className="flex items-center justify-center h-full text-slate-400 font-medium">

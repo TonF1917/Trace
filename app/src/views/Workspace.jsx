@@ -37,7 +37,13 @@ export function Workspace() {
   const [researchTopic, setResearchTopic] = useState('');
   const [isResearching, setIsResearching] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
-  const [exportSettings, setExportSettings] = useState({ nodeScale: 1.9, textScale: 1.25, edgeScale: 1.0, arrowScale: 0.5, spreadScale: 0.8 });
+  const [exportSettings, setExportSettings] = useState({
+    nodeScale: 0.8,
+    textScale: 1.0,
+    edgeScale: 1.0,
+    arrowScale: 0.5,
+    spreadScale: 1.0,
+  });
   const hoverTimeoutRef = useRef(null);
   
   const fileInputRef = useRef(null);
@@ -1094,46 +1100,46 @@ export function Workspace() {
                   </div>
                   <div className="flex items-center gap-1.5">
                     <span className="text-[10px] font-bold text-slate-400">{t('Spread')}</span>
-                    <input 
-                      type="range" min="0.8" max="2.5" step="0.05" 
-                      value={exportSettings.spreadScale ?? 0.8}
-                      onChange={e => setExportSettings(p => ({...p, spreadScale: parseFloat(e.target.value) || 0.8}))}
+                    <input
+                      type="range" min="0.8" max="2.5" step="0.05"
+                      value={exportSettings.spreadScale ?? 1.0}
+                      onChange={e => setExportSettings(p => ({...p, spreadScale: parseFloat(e.target.value) || 1.0}))}
                       className="w-14 h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer"
                       title={t('Spread out node distances')}
                     />
-                    <input 
-                      type="number" min="0.8" max="2.5" step="0.05" 
-                      value={exportSettings.spreadScale ?? 0.8}
-                      onChange={e => setExportSettings(p => ({...p, spreadScale: parseFloat(e.target.value) || 0.8}))}
+                    <input
+                      type="number" min="0.8" max="2.5" step="0.05"
+                      value={exportSettings.spreadScale ?? 1.0}
+                      onChange={e => setExportSettings(p => ({...p, spreadScale: parseFloat(e.target.value) || 1.0}))}
                       className="w-11 px-1 py-0.5 text-[10px] font-mono font-bold bg-slate-100 border border-slate-200 rounded text-slate-700 text-center focus:outline-none focus:ring-1 focus:ring-rose-400"
                     />
                   </div>
                   <div className="flex items-center gap-1.5">
                     <span className="text-[10px] font-bold text-slate-400">{t('Nodes')}</span>
-                    <input 
-                      type="range" min="0.5" max="3" step="0.05" 
-                      value={exportSettings.nodeScale ?? 1.9}
-                      onChange={e => setExportSettings(p => ({...p, nodeScale: parseFloat(e.target.value) || 1.0}))}
+                    <input
+                      type="range" min="0.5" max="3" step="0.05"
+                      value={exportSettings.nodeScale ?? 0.8}
+                      onChange={e => setExportSettings(p => ({...p, nodeScale: parseFloat(e.target.value) || 0.8}))}
                       className="w-14 h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer"
                     />
-                    <input 
-                      type="number" min="0.5" max="3" step="0.05" 
-                      value={exportSettings.nodeScale ?? 1.9}
-                      onChange={e => setExportSettings(p => ({...p, nodeScale: parseFloat(e.target.value) || 1.0}))}
+                    <input
+                      type="number" min="0.5" max="3" step="0.05"
+                      value={exportSettings.nodeScale ?? 0.8}
+                      onChange={e => setExportSettings(p => ({...p, nodeScale: parseFloat(e.target.value) || 0.8}))}
                       className="w-11 px-1 py-0.5 text-[10px] font-mono font-bold bg-slate-100 border border-slate-200 rounded text-slate-700 text-center focus:outline-none focus:ring-1 focus:ring-rose-400"
                     />
                   </div>
                   <div className="flex items-center gap-1.5">
                     <span className="text-[10px] font-bold text-slate-400">{t('Labels')}</span>
-                    <input 
-                      type="range" min="0.5" max="3" step="0.05" 
-                      value={exportSettings.textScale ?? 1.25}
+                    <input
+                      type="range" min="0.5" max="3" step="0.05"
+                      value={exportSettings.textScale ?? 1.0}
                       onChange={e => setExportSettings(p => ({...p, textScale: parseFloat(e.target.value) || 1.0}))}
                       className="w-14 h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer"
                     />
-                    <input 
-                      type="number" min="0.5" max="3" step="0.05" 
-                      value={exportSettings.textScale ?? 1.25}
+                    <input
+                      type="number" min="0.5" max="3" step="0.05"
+                      value={exportSettings.textScale ?? 1.0}
                       onChange={e => setExportSettings(p => ({...p, textScale: parseFloat(e.target.value) || 1.0}))}
                       className="w-11 px-1 py-0.5 text-[10px] font-mono font-bold bg-slate-100 border border-slate-200 rounded text-slate-700 text-center focus:outline-none focus:ring-1 focus:ring-rose-400"
                     />

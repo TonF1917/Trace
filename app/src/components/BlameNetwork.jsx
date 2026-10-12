@@ -165,7 +165,7 @@ export function BlameNetwork({
           if (!currentNodesMap.has(sourceNodeId)) {
             if (!persistentNodes.current.has(sourceNodeId)) {
               const angle = currentNodesMap.size * 2.39996;
-              const dist = 120 + currentNodesMap.size * 18;
+              const dist = 50 + currentNodesMap.size * 8;
               persistentNodes.current.set(sourceNodeId, {
                 id: sourceNodeId,
                 group: 'source',
@@ -186,7 +186,7 @@ export function BlameNetwork({
           const existingNode = persistentNodes.current.get(mainActorId);
           if (!existingNode || typeof existingNode.x !== 'number' || !isFinite(existingNode.x) || Math.abs(existingNode.x) > 5000) {
             const angle = currentNodesMap.size * 2.39996;
-            const dist = 160 + currentNodesMap.size * 22;
+            const dist = 50 + currentNodesMap.size * 8;
             persistentNodes.current.set(mainActorId, {
               id: mainActorId,
               group: 'actor',
@@ -209,7 +209,7 @@ export function BlameNetwork({
           const existingNode = persistentNodes.current.get(blameTargetId);
           if (!existingNode || typeof existingNode.x !== 'number' || !isFinite(existingNode.x) || Math.abs(existingNode.x) > 5000) {
             const angle = currentNodesMap.size * 2.39996;
-            const dist = 160 + currentNodesMap.size * 22;
+            const dist = 50 + currentNodesMap.size * 8;
             persistentNodes.current.set(blameTargetId, {
               id: blameTargetId,
               group: 'target',
@@ -678,8 +678,8 @@ export function BlameNetwork({
         // 1. Scaled text-aware collision radius: node radius + label height & width + degree buffer
         fgRef.current.d3Force('collide', forceCollide().radius(n => {
           const r = (n.academicRadius || 10) * nodeScale;
-          const collisionPadding = 38 * textScale;
-          return r + collisionPadding + Math.min(20, (n.degree || 1) * 3);
+          const collisionPadding = 26 * textScale;
+          return r + collisionPadding + Math.min(12, (n.degree || 1) * 2);
         }).strength(1.0).iterations(10));
 
         // 2. Strong degree-weighted repulsion so hubs & dense clusters have ample breathing room
@@ -688,11 +688,11 @@ export function BlameNetwork({
           chargeForce.strength(n => {
             const deg = n.degree || 1;
             const r = (n.academicRadius || 10) * nodeScale;
-            return (-1100 - 250 * Math.log2(1 + deg) - 25 * r) * spread;
+            return (-380 - 90 * Math.log2(1 + deg) - 10 * r) * spread;
           });
         }
 
-        // 3. Differential Link Force: tight intra-community (80px, 0.65), expansive inter-community (260px, 0.12)
+        // 3. Differential Link Force: tight intra-community (60px, 0.75), moderate inter-community (125px, 0.35)
         const linkForce = fgRef.current.d3Force('link');
         if (linkForce && typeof linkForce.distance === 'function') {
           linkForce
@@ -700,19 +700,18 @@ export function BlameNetwork({
               const sNode = typeof link.source === 'object' ? link.source : {};
               const tNode = typeof link.target === 'object' ? link.target : {};
               const isSameCommunity = sNode.communityId !== undefined && tNode.communityId !== undefined && sNode.communityId === tNode.communityId;
-              // Intra-community = compact (80px), Inter-community = expansive (260px)
-              const baseDist = isSameCommunity ? 80 : 260;
+              // Intra-community = 60px (tight, unified cluster), Inter-community = 125px (clear gap, but still cohesive in one screen)
+              const baseDist = isSameCommunity ? 60 : 125;
               const sR = (sNode.academicRadius || 10) * nodeScale;
               const tR = (tNode.academicRadius || 10) * nodeScale;
-              const minRadiiDist = sR + tR + 35 * textScale;
+              const minRadiiDist = sR + tR + 24 * textScale;
               return Math.max(baseDist * spread, minRadiiDist * spread);
             })
             .strength(link => {
               const sNode = typeof link.source === 'object' ? link.source : {};
               const tNode = typeof link.target === 'object' ? link.target : {};
               const isSameCommunity = sNode.communityId !== undefined && tNode.communityId !== undefined && sNode.communityId === tNode.communityId;
-              // Crucial: Inter-community links have very weak spring tension (0.12), so repulsion naturally pushes factions far apart!
-              return isSameCommunity ? 0.65 : 0.12;
+              return isSameCommunity ? 0.75 : 0.35;
             });
         }
 
@@ -721,8 +720,8 @@ export function BlameNetwork({
         fgRef.current.d3Force('clusterY', null);
 
         // Gentle global centering gravity to keep the whole graph centered in the viewport
-        fgRef.current.d3Force('x', forceX(0).strength(0.015));
-        fgRef.current.d3Force('y', forceY(0).strength(0.015));
+        fgRef.current.d3Force('x', forceX(0).strength(0.045));
+        fgRef.current.d3Force('y', forceY(0).strength(0.045));
 
         if (typeof fgRef.current.d3ReheatSimulation === 'function') {
           fgRef.current.d3ReheatSimulation();

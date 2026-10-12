@@ -670,11 +670,11 @@ export function BlameNetwork({
       }
 
       const isGroupActive = activeGroupFilter === group.id && legendGroupMode === 'community';
-      ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${isGroupActive ? 0.26 : 0.12})`;
-      ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${isGroupActive ? 0.92 : 0.58})`;
+      ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${isGroupActive ? 0.35 : 0.20})`;
+      ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${isGroupActive ? 0.96 : 0.78})`;
 
       const edgeScale = exportSettings?.edgeScale || 1;
-      ctx.lineWidth = (isGroupActive ? 2.8 : 1.8) * edgeScale;
+      ctx.lineWidth = (isGroupActive ? 3.2 : 2.2) * edgeScale;
       ctx.lineJoin = 'round';
       if (isGroupActive) {
         ctx.setLineDash([]);
@@ -727,11 +727,11 @@ export function BlameNetwork({
       });
       const centroidX = sumX / hull.length;
 
-      // Full substantive faction identity in resting state, expanded with frame & count when active
+      // Full substantive faction identity + dominant frame in both resting and active states
       const factionLabel = group.factionName || group.title || `Faction ${group.id + 1}`;
       const dominant = group.dominantFrame || '';
-      const badgeText = isGroupActive
-        ? (dominant ? `${factionLabel} · ${dominant} (${group.memberIds.length})` : `${factionLabel} (${group.memberIds.length})`)
+      const badgeText = dominant
+        ? `${factionLabel} · ${dominant} (${group.memberIds.length})`
         : `${factionLabel} (${group.memberIds.length})`;
       const textScale = exportSettings?.textScale ?? 1.0;
       const badgeFontSize = (isGroupActive ? 10.5 : 9.5) * textScale;
@@ -823,16 +823,23 @@ export function BlameNetwork({
       } else {
         ctx.rect(pillX, pillY, pillWidth, pillHeight);
       }
-      ctx.fillStyle = isGroupActive ? `rgba(${r}, ${g}, ${b}, 0.95)` : 'rgba(255, 255, 255, 0.92)';
-      ctx.fill();
+      if (isGroupActive) {
+        ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.95)`;
+        ctx.fill();
+      } else {
+        ctx.fillStyle = '#ffffff';
+        ctx.fill();
+        ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.16)`;
+        ctx.fill();
+      }
       ctx.shadowBlur = 0;
-      ctx.strokeStyle = isGroupActive ? '#ffffff' : `rgba(${r}, ${g}, ${b}, 0.60)`;
-      ctx.lineWidth = isGroupActive ? 1.5 : 0.8;
+      ctx.strokeStyle = isGroupActive ? '#ffffff' : `rgba(${r}, ${g}, ${b}, 0.90)`;
+      ctx.lineWidth = isGroupActive ? 1.8 : 1.6;
       ctx.stroke();
 
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillStyle = isGroupActive ? '#ffffff' : '#334155';
+      ctx.fillStyle = isGroupActive ? '#ffffff' : '#1e293b';
       ctx.fillText(badgeText, bestX, bestY);
       ctx.restore();
     });

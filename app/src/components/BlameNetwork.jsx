@@ -185,9 +185,8 @@ export function BlameNetwork({
         if (!currentNodesMap.has(mainActorId)) {
           const existingNode = persistentNodes.current.get(mainActorId);
           if (!existingNode || typeof existingNode.x !== 'number' || !isFinite(existingNode.x) || Math.abs(existingNode.x) > 5000) {
-            const cId = existingNode?.communityId ?? 0;
-            const angle = (cId / 4) * 2 * Math.PI;
-            const dist = 180 + Math.random() * 60;
+            const angle = currentNodesMap.size * 2.39996;
+            const dist = 160 + currentNodesMap.size * 22;
             persistentNodes.current.set(mainActorId, {
               id: mainActorId,
               group: 'actor',
@@ -209,9 +208,8 @@ export function BlameNetwork({
         if (!currentNodesMap.has(blameTargetId)) {
           const existingNode = persistentNodes.current.get(blameTargetId);
           if (!existingNode || typeof existingNode.x !== 'number' || !isFinite(existingNode.x) || Math.abs(existingNode.x) > 5000) {
-            const cId = existingNode?.communityId ?? 0;
-            const angle = (cId / 4) * 2 * Math.PI;
-            const dist = 180 + Math.random() * 60;
+            const angle = currentNodesMap.size * 2.39996;
+            const dist = 160 + currentNodesMap.size * 22;
             persistentNodes.current.set(blameTargetId, {
               id: blameTargetId,
               group: 'target',
@@ -427,15 +425,6 @@ export function BlameNetwork({
       const cId = communityMap.get(n.id) ?? 0;
       n.communityId = cId;
       n.communityColor = COMMUNITY_COLORS[cId % COMMUNITY_COLORS.length];
-
-      // Community-Aware Initial Positioning: place unpositioned or newly placed nodes near community orbit direction
-      if (!n._hasCommunityPos || typeof n.x !== 'number' || !isFinite(n.x) || (n.x === 0 && n.y === 0)) {
-        const angle = (cId / Math.max(1, (communities?.length || 4))) * 2 * Math.PI;
-        const dist = 180 + Math.random() * 60;
-        n.x = Math.cos(angle) * dist;
-        n.y = Math.sin(angle) * dist;
-        n._hasCommunityPos = true;
-      }
     });
 
     // Semantic Group/Cluster Naming
@@ -699,39 +688,37 @@ export function BlameNetwork({
           chargeForce.strength(n => {
             const deg = n.degree || 1;
             const r = (n.academicRadius || 10) * nodeScale;
-            return (-650 - 180 * Math.log2(1 + deg) - 20 * r) * spread;
+            return (-1100 - 250 * Math.log2(1 + deg) - 25 * r) * spread;
           });
         }
 
-        // 3. Community-aware link distance: tighter for intra-community, wider for inter-community
+        // 3. Differential Link Force: tight intra-community (80px, 0.65), expansive inter-community (260px, 0.12)
         const linkForce = fgRef.current.d3Force('link');
         if (linkForce && typeof linkForce.distance === 'function') {
-          linkForce.distance(link => {
-            const sNode = typeof link.source === 'object' ? link.source : {};
-            const tNode = typeof link.target === 'object' ? link.target : {};
-            const isSameCommunity = sNode.communityId !== undefined && tNode.communityId !== undefined && sNode.communityId === tNode.communityId;
-            const baseDist = isSameCommunity ? 75 : 240;
-            const sR = (sNode.academicRadius || 10) * nodeScale;
-            const tR = (tNode.academicRadius || 10) * nodeScale;
-            const minRadiiDist = sR + tR + 40 * textScale;
-            return Math.max(baseDist * spread, minRadiiDist * spread);
-          });
+          linkForce
+            .distance(link => {
+              const sNode = typeof link.source === 'object' ? link.source : {};
+              const tNode = typeof link.target === 'object' ? link.target : {};
+              const isSameCommunity = sNode.communityId !== undefined && tNode.communityId !== undefined && sNode.communityId === tNode.communityId;
+              // Intra-community = compact (80px), Inter-community = expansive (260px)
+              const baseDist = isSameCommunity ? 80 : 260;
+              const sR = (sNode.academicRadius || 10) * nodeScale;
+              const tR = (tNode.academicRadius || 10) * nodeScale;
+              const minRadiiDist = sR + tR + 35 * textScale;
+              return Math.max(baseDist * spread, minRadiiDist * spread);
+            })
+            .strength(link => {
+              const sNode = typeof link.source === 'object' ? link.source : {};
+              const tNode = typeof link.target === 'object' ? link.target : {};
+              const isSameCommunity = sNode.communityId !== undefined && tNode.communityId !== undefined && sNode.communityId === tNode.communityId;
+              // Crucial: Inter-community links have very weak spring tension (0.12), so repulsion naturally pushes factions far apart!
+              return isSameCommunity ? 0.65 : 0.12;
+            });
         }
 
-        // Community Territorial Anchor Force (社群阵营专属向心力)
-        const numComms = Math.max(1, (graphData.communities || []).length);
-        const clusterOrbitRadius = 240 * spread;
-        const getClusterTarget = (n) => {
-          const cId = n.communityId ?? 0;
-          const angle = (cId / numComms) * 2 * Math.PI - Math.PI / 2;
-          return {
-            x: Math.cos(angle) * clusterOrbitRadius,
-            y: Math.sin(angle) * clusterOrbitRadius
-          };
-        };
-
-        fgRef.current.d3Force('clusterX', forceX(n => getClusterTarget(n).x).strength(0.075));
-        fgRef.current.d3Force('clusterY', forceY(n => getClusterTarget(n).y).strength(0.075));
+        // Remove Point-Attractor Forces Completely (delete clusterX and clusterY)
+        fgRef.current.d3Force('clusterX', null);
+        fgRef.current.d3Force('clusterY', null);
 
         // Gentle global centering gravity to keep the whole graph centered in the viewport
         fgRef.current.d3Force('x', forceX(0).strength(0.015));

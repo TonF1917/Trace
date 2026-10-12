@@ -184,6 +184,7 @@
   "Connect Existing": "节点关联",
   "AI Merge": "AI 实体合并",
   "Curve": "曲线",
+  "Edge Text": "边文字",
   "Debug": "调试",
   "Deep Extract complete. No new relationships were found... The tree might be complete!": "深度提取完成。未找到新关系...知识树可能已完整！",
   "Drag nodes to pin them. Click a pinned node to unpin.": "拖拽节点以固定位置。点击已固定的节点可解除固定。",

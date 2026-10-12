@@ -7,6 +7,7 @@ export function ViewControls({
   showFrequencies, setShowFrequencies,
   showGroupEnclosures, setShowGroupEnclosures,
   showCurvedEdges, setShowCurvedEdges,
+  showEdgeLabels = true, setShowEdgeLabels,
   fontFamily, setFontFamily,
   showDebug, setShowDebug,
   legendGroupMode = 'community', setLegendGroupMode
@@ -124,13 +125,22 @@ export function ViewControls({
           {t('Groups')}
         </label>
         <label className="flex items-center gap-1.5 text-xs font-bold text-slate-600 cursor-pointer hover:text-slate-800">
-          <input 
-            type="checkbox" 
-            checked={showCurvedEdges} 
+          <input
+            type="checkbox"
+            checked={showCurvedEdges}
             onChange={(e) => setShowCurvedEdges(e.target.checked)}
             className="rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
           />
           {t('Curve')}
+        </label>
+        <label className="flex items-center gap-1.5 text-xs font-bold text-slate-600 cursor-pointer hover:text-slate-800">
+          <input
+            type="checkbox"
+            checked={showEdgeLabels ?? true}
+            onChange={(e) => setShowEdgeLabels && setShowEdgeLabels(e.target.checked)}
+            className="rounded text-blue-600 focus:ring-blue-500 cursor-pointer"
+          />
+          {t('Edge Text')}
         </label>
         <div className="w-px h-4 bg-slate-200 mx-1"></div>
         <div className="flex bg-slate-100 p-0.5 rounded-md">

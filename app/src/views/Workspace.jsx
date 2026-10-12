@@ -59,6 +59,7 @@ export function Workspace() {
   const [graphMode, setGraphMode] = useState('explore');
   const [showGroupEnclosures, setShowGroupEnclosures] = useState(true);
   const [showCurvedEdges, setShowCurvedEdges] = useState(true);
+  const [showEdgeLabels, setShowEdgeLabels] = useState(true);
   const [fontFamily, setFontFamily] = useState('serif');
   const [showDebug, setShowDebug] = useState(false);
   const [legendGroupMode, setLegendGroupMode] = useState('community');
@@ -1029,6 +1030,8 @@ export function Workspace() {
                   setShowGroupEnclosures={setShowGroupEnclosures}
                   showCurvedEdges={showCurvedEdges}
                   setShowCurvedEdges={setShowCurvedEdges}
+                  showEdgeLabels={showEdgeLabels}
+                  setShowEdgeLabels={setShowEdgeLabels}
                   fontFamily={fontFamily}
                   setFontFamily={setFontFamily}
                   showDebug={showDebug}
@@ -1084,6 +1087,7 @@ export function Workspace() {
                   showFrequencies={showFrequencies}
                   showGroupEnclosures={showGroupEnclosures}
                   showCurvedEdges={showCurvedEdges}
+                  showEdgeLabels={showEdgeLabels}
                   fontFamily={fontFamily}
                   showDebug={showDebug}
                   graphMode={graphMode}

@@ -64,6 +64,7 @@ export function BlameNetwork({
   showFrequencies,
   showGroupEnclosures = true,
   showCurvedEdges = true,
+  showEdgeLabels = true,
   fontFamily = 'serif',
   showDebug = false,
   relationColors = {},
@@ -86,6 +87,9 @@ export function BlameNetwork({
   const [selectedCommunity, setSelectedCommunity] = useState(null);
   // Hovered group from legend hover interaction
   const [hoveredGroup, setHoveredGroup] = useState(null);
+  // Hovered node and link from graph interaction for responsive label activation
+  const [hoveredNode, setHoveredNode] = useState(null);
+  const [hoveredLink, setHoveredLink] = useState(null);
   // Legend View Modes: 'community' | 'centrality' | 'stance' | 'none'
   const [internalLegendGroupMode, setInternalLegendGroupMode] = useState('community');
   const legendGroupMode = propLegendGroupMode !== undefined ? propLegendGroupMode : internalLegendGroupMode;
@@ -602,13 +606,17 @@ export function BlameNetwork({
       }
 
       const isGroupActive = activeGroupFilter === group.id && legendGroupMode === 'community';
-      ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${isGroupActive ? 0.28 : 0.14})`;
-      ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${isGroupActive ? 0.90 : 0.60})`;
+      ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${isGroupActive ? 0.20 : 0.045})`;
+      ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${isGroupActive ? 0.85 : 0.38})`;
 
       const edgeScale = exportSettings?.edgeScale || 1;
-      ctx.lineWidth = (isGroupActive ? 3.0 : 2.0) * edgeScale;
+      ctx.lineWidth = (isGroupActive ? 2.5 : 1.2) * edgeScale;
       ctx.lineJoin = 'round';
-      ctx.setLineDash([5 * edgeScale, 5 * edgeScale]);
+      if (isGroupActive) {
+        ctx.setLineDash([]);
+      } else {
+        ctx.setLineDash([4 * edgeScale, 4 * edgeScale]);
+      }
 
       ctx.beginPath();
       hull.forEach((pt, i) => {
@@ -619,29 +627,69 @@ export function BlameNetwork({
       ctx.fill();
       ctx.stroke();
 
-      // Render a clean floating pill badge / label at the top of each convex hull
-      let minHullY = Infinity;
+      // Intelligently position floating cluster badge strictly outside the convex hull with collision avoidance
+      let minHullY = Infinity, maxHullY = -Infinity;
+      let minHullX = Infinity, maxHullX = -Infinity;
       let sumX = 0;
+      let apexPt = hull[0];
       hull.forEach(pt => {
         sumX += pt.x;
         if (pt.y < minHullY) {
           minHullY = pt.y;
+          apexPt = pt;
         }
+        if (pt.y > maxHullY) maxHullY = pt.y;
+        if (pt.x < minHullX) minHullX = pt.x;
+        if (pt.x > maxHullX) maxHullX = pt.x;
       });
-      const badgeX = sumX / hull.length;
-      const badgeY = minHullY - 12;
+      const centroidX = sumX / hull.length;
 
       const badgeText = `${group.title || ('Cluster ' + (group.id + 1))} (${group.memberIds.length})`;
-      const badgeFontSize = 10 * (exportSettings?.textScale ?? 1.0);
+      const badgeFontSize = 9.5 * (exportSettings?.textScale ?? 1.0);
       const fontFam = fontFamily === 'serif' ? '"Times New Roman", Times, serif' : 'Inter, -apple-system, sans-serif';
       ctx.font = `bold ${badgeFontSize}px ${fontFam}`;
       const textMetrics = ctx.measureText(badgeText);
       const textWidth = textMetrics.width;
       const pillWidth = textWidth + 14;
-      const pillHeight = badgeFontSize + 8;
+      const pillHeight = badgeFontSize + 7;
       const pillRadius = pillHeight / 2;
-      const pillX = badgeX - pillWidth / 2;
-      const pillY = badgeY - pillHeight / 2;
+
+      // Candidate placement positions:
+      // Try placing safely above the apex outside the hull, clamped within hull X span
+      const candidateX = Math.max(minHullX + pillWidth / 2, Math.min(maxHullX - pillWidth / 2, (apexPt.x + centroidX) / 2));
+      const testOffsets = [
+        minHullY - (pillHeight / 2 + 16 * edgeScale),
+        minHullY - (pillHeight / 2 + 28 * edgeScale),
+        minHullY - (pillHeight / 2 + 40 * edgeScale),
+        maxHullY + (pillHeight / 2 + 16 * edgeScale),
+        maxHullY + (pillHeight / 2 + 28 * edgeScale)
+      ];
+
+      // Perform node collision check across all nodes in the graph
+      let bestX = candidateX;
+      let bestY = testOffsets[0];
+      for (let i = 0; i < testOffsets.length; i++) {
+        const testY = testOffsets[i];
+        let collides = false;
+        for (const n of persistentNodes.current.values()) {
+          if (typeof n.x !== 'number' || typeof n.y !== 'number') continue;
+          const nr = (n.academicRadius || 10) * (exportSettings?.nodeScale ?? 0.8) + 12;
+          if (Math.abs(n.x - candidateX) < (pillWidth / 2 + nr) && Math.abs(n.y - testY) < (pillHeight / 2 + nr)) {
+            collides = true;
+            break;
+          }
+        }
+        if (!collides) {
+          bestY = testY;
+          break;
+        }
+      }
+
+      const pillX = bestX - pillWidth / 2;
+      const pillY = bestY - pillHeight / 2;
+
+      // Register badge occupied rect so edge labels avoid drawing over the cluster badge
+      labelOccupiedRects.current.push({ x: bestX, y: bestY });
 
       ctx.save();
       ctx.setLineDash([]);
@@ -651,16 +699,16 @@ export function BlameNetwork({
       } else {
         ctx.rect(pillX, pillY, pillWidth, pillHeight);
       }
-      ctx.fillStyle = isGroupActive ? `rgba(${r}, ${g}, ${b}, 0.95)` : 'rgba(255, 255, 255, 0.92)';
+      ctx.fillStyle = isGroupActive ? `rgba(${r}, ${g}, ${b}, 0.95)` : 'rgba(255, 255, 255, 0.94)';
       ctx.fill();
-      ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${isGroupActive ? 1.0 : 0.8})`;
-      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = isGroupActive ? '#ffffff' : `rgba(${r}, ${g}, ${b}, 0.80)`;
+      ctx.lineWidth = isGroupActive ? 1.5 : 1.0;
       ctx.stroke();
 
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillStyle = isGroupActive ? '#ffffff' : '#1e293b';
-      ctx.fillText(badgeText, badgeX, badgeY);
+      ctx.fillText(badgeText, bestX, bestY);
       ctx.restore();
     });
     ctx.restore();
@@ -678,7 +726,7 @@ export function BlameNetwork({
         // 1. Scaled text-aware collision radius: node radius + label height & width + degree buffer
         fgRef.current.d3Force('collide', forceCollide().radius(n => {
           const r = (n.academicRadius || 10) * nodeScale;
-          const collisionPadding = 26 * textScale;
+          const collisionPadding = 34 * textScale;
           return r + collisionPadding + Math.min(12, (n.degree || 1) * 2);
         }).strength(1.0).iterations(10));
 
@@ -688,11 +736,11 @@ export function BlameNetwork({
           chargeForce.strength(n => {
             const deg = n.degree || 1;
             const r = (n.academicRadius || 10) * nodeScale;
-            return (-380 - 90 * Math.log2(1 + deg) - 10 * r) * spread;
+            return (-420 - 95 * Math.log2(1 + deg) - 12 * r) * spread;
           });
         }
 
-        // 3. Differential Link Force: tight intra-community (60px, 0.75), moderate inter-community (125px, 0.35)
+        // 3. Differential Link Force: intra-community (75px, 0.75), inter-community (140px, 0.35)
         const linkForce = fgRef.current.d3Force('link');
         if (linkForce && typeof linkForce.distance === 'function') {
           linkForce
@@ -700,11 +748,11 @@ export function BlameNetwork({
               const sNode = typeof link.source === 'object' ? link.source : {};
               const tNode = typeof link.target === 'object' ? link.target : {};
               const isSameCommunity = sNode.communityId !== undefined && tNode.communityId !== undefined && sNode.communityId === tNode.communityId;
-              // Intra-community = 60px (tight, unified cluster), Inter-community = 125px (clear gap, but still cohesive in one screen)
-              const baseDist = isSameCommunity ? 60 : 125;
+              // Intra-community = 75px (cohesive cluster), Inter-community = 140px (clear gap between distinct clusters)
+              const baseDist = isSameCommunity ? 75 : 140;
               const sR = (sNode.academicRadius || 10) * nodeScale;
               const tR = (tNode.academicRadius || 10) * nodeScale;
-              const minRadiiDist = sR + tR + 24 * textScale;
+              const minRadiiDist = sR + tR + 28 * textScale;
               return Math.max(baseDist * spread, minRadiiDist * spread);
             })
             .strength(link => {
@@ -880,94 +928,131 @@ export function BlameNetwork({
   const linkCanvasObject = useCallback((link, ctx, globalScale) => {
     try {
       if (link.label === 'mentions' || link.label === 'mentions target') return; // Hide source links
-      
+      if (showEdgeLabels === false) return; // User toggled edge text off
+
       let isHighlighted = true;
-    if (hoveredArticle) {
-      isHighlighted = link.articleIds.has(hoveredArticle);
-    }
+      if (hoveredArticle) {
+        isHighlighted = link.articleIds && link.articleIds.has(hoveredArticle);
+      }
 
-    const start = link.source;
-    const end = link.target;
-    
-    if (typeof start !== 'object' || typeof end !== 'object') return; // ForceGraph might pass IDs initially
+      const start = link.source;
+      const end = link.target;
 
-    const dx = end.x - start.x;
-    const dy = end.y - start.y;
-    const dist = Math.hypot(dx, dy);
-    const scale = exportSettings?.nodeScale ?? 0.8;
+      if (typeof start !== 'object' || typeof end !== 'object') return; // ForceGraph might pass IDs initially
 
-    // If nodes are too close, skip rendering to avoid clutter
-    if (dist < 22 * scale) return;
+      const dx = end.x - start.x;
+      const dy = end.y - start.y;
+      const dist = Math.hypot(dx, dy);
+      const scale = exportSettings?.nodeScale ?? 0.8;
+      const textScale = exportSettings?.textScale ?? 1.0;
 
-    const curvature = showCurvedEdges ? (link.dynamicCurvature || 0) : 0;
+      // Skip degenerate edges
+      if (dist < 26 * scale) return;
 
-    // --- Bezier control point (exact formula used by react-force-graph-2d for curved links) ---
-    const midX = (start.x + end.x) / 2;
-    const midY = (start.y + end.y) / 2;
-    const cX = curvature !== 0 ? midX + dy * curvature : midX;
-    const cY = curvature !== 0 ? midY - dx * curvature : midY;
+      const isEdgeInHoveredArticle = hoveredArticle && link.articleIds && link.articleIds.has(hoveredArticle);
+      const isEdgeConnectedToHoveredNode = hoveredNode && (start.id === hoveredNode || end.id === hoveredNode);
+      const isEdgeHovered = hoveredLink && link.id === hoveredLink;
 
-    // --- Compute t-parameter: spread labels along the curve based on fan slot ---
-    const fanIndex = link.fanIndex ?? 0;
-    const fanTotal = link.fanTotal ?? 1;
-    let tParam;
-    if (fanTotal <= 1) {
-      tParam = 0.5;
-    } else {
-      // Spread t across [0.36, 0.64] based on fan position
-      const tRange = Math.min(0.12 + 0.03 * fanTotal, 0.26);
-      tParam = 0.5 + ((fanIndex / (fanTotal - 1)) * 2 - 1) * tRange;
-    }
-    tParam = Math.max(0.32, Math.min(0.68, tParam));
+      // Group dimming check
+      const isGroupDimmed = activeGroupFilter !== null &&
+        (!isNodeInGroup(start, legendGroupMode, activeGroupFilter) && !isNodeInGroup(end, legendGroupMode, activeGroupFilter));
 
-    // Evaluate point on quadratic Bezier at tParam
-    const oneMinusT = 1 - tParam;
-    const textPos = {
-      x: oneMinusT * oneMinusT * start.x + 2 * oneMinusT * tParam * cX + tParam * tParam * end.x,
-      y: oneMinusT * oneMinusT * start.y + 2 * oneMinusT * tParam * cY + tParam * tParam * end.y,
-    };
+      // Dimmed edges shouldn't show text if a specific group is focused, unless actively hovered
+      if (isGroupDimmed && !isEdgeInHoveredArticle && !isEdgeConnectedToHoveredNode && !isEdgeHovered) {
+        return;
+      }
 
-    // Evaluate exact Bezier curve tangent vector at tParam
-    const tangentX = 2 * oneMinusT * (cX - start.x) + 2 * tParam * (end.x - cX);
-    const tangentY = 2 * oneMinusT * (cY - start.y) + 2 * tParam * (end.y - cY);
+      const curvature = showCurvedEdges ? (link.dynamicCurvature || 0) : 0;
 
-    const relLabel = link.label.split(/[\s/]/)[0]; // Extract 'Opposes' from 'Opposes / Blames'
+      // --- Bezier control point (exact formula used by react-force-graph-2d for curved links) ---
+      const midX = (start.x + end.x) / 2;
+      const midY = (start.y + end.y) / 2;
+      const cX = curvature !== 0 ? midX + dy * curvature : midX;
+      const cY = curvature !== 0 ? midY - dx * curvature : midY;
 
-    const textScale = exportSettings?.textScale ?? 1.0;
+      // Node radii at start & end to prevent text overlapping node circles
+      const sRadius = (start.academicRadius || 10) * scale;
+      const tRadius = (end.academicRadius || 10) * scale;
+      const safeStartDist = sRadius + 16 * textScale;
+      const safeEndDist = tRadius + 16 * textScale;
 
-    let angle = Math.atan2(tangentY, tangentX);
-    // Keep text upright
-    if (angle > Math.PI / 2 || angle < -Math.PI / 2) {
-      angle += Math.PI;
-    }
+      // Compute safe range along Bezier curve
+      const minSafeT = Math.min(0.44, safeStartDist / dist);
+      const maxSafeT = Math.max(0.56, 1 - (safeEndDist / dist));
 
-    ctx.save();
-    ctx.translate(textPos.x, textPos.y);
-    ctx.rotate(angle);
+      // --- Compute t-parameter: spread labels along curve safely away from node circles ---
+      const fanIndex = link.fanIndex ?? 0;
+      const fanTotal = link.fanTotal ?? 1;
+      let tParam = 0.5;
+      if (fanTotal > 1) {
+        const tRange = Math.min(0.12 + 0.02 * fanTotal, 0.20);
+        tParam = 0.5 + ((fanIndex / (fanTotal - 1)) * 2 - 1) * tRange;
+      }
+      tParam = Math.max(minSafeT, Math.min(maxSafeT, tParam));
 
-    const activeFontFam = fontFamily === 'serif' ? '"Times New Roman", Times, serif' : 'Inter, -apple-system, sans-serif';
-    const edgeFontSize = 10.5 * textScale;
-    ctx.font = `${fontFamily === 'serif' ? 'italic ' : '500 '}${edgeFontSize}px ${activeFontFam}`;
-    const alpha = isHighlighted ? 0.95 : 0.45;
+      // Evaluate point on quadratic Bezier at tParam
+      const oneMinusT = 1 - tParam;
+      let textX = oneMinusT * oneMinusT * start.x + 2 * oneMinusT * tParam * cX + tParam * tParam * end.x;
+      let textY = oneMinusT * oneMinusT * start.y + 2 * oneMinusT * tParam * cY + tParam * tParam * end.y;
 
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
+      // Evaluate exact Bezier curve tangent & normal vectors
+      const tangentX = 2 * oneMinusT * (cX - start.x) + 2 * tParam * (end.x - cX);
+      const tangentY = 2 * oneMinusT * (cY - start.y) + 2 * tParam * (end.y - cY);
+      const tangentLen = Math.hypot(tangentX, tangentY) || 1;
+      const normalX = -tangentY / tangentLen;
+      const normalY = tangentX / tangentLen;
 
-    ctx.globalAlpha = alpha;
+      // Fan offset perpendicular to curve to stagger parallel edge labels cleanly
+      if (fanTotal > 1) {
+        const fanOffset = ((fanIndex / (fanTotal - 1)) - 0.5) * 11 * textScale;
+        textX += normalX * fanOffset;
+        textY += normalY * fanOffset;
+      }
 
-    // Crisp 2.5px white stroke halo to isolate text cleanly from underlying lines without drowning letterforms
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 2.5;
-    ctx.lineJoin = 'round';
-    ctx.miterLimit = 2;
-    ctx.strokeText(relLabel, 0, 0);
+      // Check collision with node labels or cluster badges
+      const collidesWithLabel = labelOccupiedRects.current.some(rect => {
+        return Math.hypot(rect.x - textX, rect.y - textY) < 22 * textScale;
+      });
+      if (collidesWithLabel) {
+        // Nudge slightly along normal vector to step out of collision
+        textX += normalX * (12 * textScale);
+        textY += normalY * (12 * textScale);
+      }
 
-    ctx.fillStyle = isHighlighted ? '#0f172a' : '#334155';
-    ctx.fillText(relLabel, 0, 0);
+      const relLabel = link.label.split(/[\s/]/)[0]; // Extract 'Opposes' from 'Opposes / Blames'
 
-    ctx.restore();
+      let angle = Math.atan2(tangentY, tangentX);
+      // Keep text upright
+      if (angle > Math.PI / 2 || angle < -Math.PI / 2) {
+        angle += Math.PI;
+      }
+
+      ctx.save();
+      ctx.translate(textX, textY);
+      ctx.rotate(angle);
+
+      const activeFontFam = fontFamily === 'serif' ? '"Times New Roman", Times, serif' : 'Inter, -apple-system, sans-serif';
+      const edgeFontSize = 9.5 * textScale;
+      ctx.font = `${fontFamily === 'serif' ? 'italic ' : '500 '}${edgeFontSize}px ${activeFontFam}`;
+      const alpha = (isHighlighted || isEdgeConnectedToHoveredNode || isEdgeHovered) ? 0.95 : 0.60;
+
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.globalAlpha = alpha;
+
+      // Crisp 3.0px white stroke halo to cleanly isolate text from underlying lines
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 3.0;
+      ctx.lineJoin = 'round';
+      ctx.miterLimit = 2;
+      ctx.strokeText(relLabel, 0, 0);
+
+      ctx.fillStyle = (isHighlighted || isEdgeConnectedToHoveredNode || isEdgeHovered) ? '#0f172a' : '#334155';
+      ctx.fillText(relLabel, 0, 0);
+
+      ctx.restore();
     } catch (err) {}
-  }, [hoveredArticle, activeArticleIds, filteredArticles, allArticles, graphMode, showCurvedEdges, fontFamily, exportSettings, labelOccupiedRects]);
+  }, [hoveredArticle, hoveredNode, hoveredLink, activeGroupFilter, legendGroupMode, isNodeInGroup, showCurvedEdges, showEdgeLabels, fontFamily, exportSettings]);
 
   // Find which relations are actually used in the current dataset
   const usedRelations = useMemo(() => {
@@ -1362,6 +1447,8 @@ export function BlameNetwork({
             onNodeClick={handleNodeClick}
             onNodeDragEnd={handleNodeDragEnd}
             onLinkClick={handleLinkClick}
+            onNodeHover={node => setHoveredNode(node ? node.id : null)}
+            onLinkHover={link => setHoveredLink(link ? link.id : null)}
             onEngineStop={handleEngineStop}
             cooldownTicks={200}
             d3AlphaDecay={0.022}

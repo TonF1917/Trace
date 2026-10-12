@@ -185,8 +185,9 @@ export function BlameNetwork({
         if (!currentNodesMap.has(mainActorId)) {
           const existingNode = persistentNodes.current.get(mainActorId);
           if (!existingNode || typeof existingNode.x !== 'number' || !isFinite(existingNode.x) || Math.abs(existingNode.x) > 5000) {
-            const angle = currentNodesMap.size * 2.39996;
-            const dist = 120 + currentNodesMap.size * 18;
+            const cId = existingNode?.communityId ?? 0;
+            const angle = (cId / 4) * 2 * Math.PI;
+            const dist = 180 + Math.random() * 60;
             persistentNodes.current.set(mainActorId, {
               id: mainActorId,
               group: 'actor',
@@ -208,8 +209,9 @@ export function BlameNetwork({
         if (!currentNodesMap.has(blameTargetId)) {
           const existingNode = persistentNodes.current.get(blameTargetId);
           if (!existingNode || typeof existingNode.x !== 'number' || !isFinite(existingNode.x) || Math.abs(existingNode.x) > 5000) {
-            const angle = currentNodesMap.size * 2.39996;
-            const dist = 120 + currentNodesMap.size * 18;
+            const cId = existingNode?.communityId ?? 0;
+            const angle = (cId / 4) * 2 * Math.PI;
+            const dist = 180 + Math.random() * 60;
             persistentNodes.current.set(blameTargetId, {
               id: blameTargetId,
               group: 'target',
@@ -219,7 +221,7 @@ export function BlameNetwork({
           }
           const targetNode = persistentNodes.current.get(blameTargetId);
           targetNode.name = rawTarget;
-          targetNode.color = '#64748b'; 
+          targetNode.color = '#64748b';
           const freq = entityFrequencies[normalizeEntity(rawTarget)] || 1;
           const baseRadius = Math.max(6, 6 * Math.sqrt(freq));
           targetNode.academicRadius = baseRadius;
@@ -425,6 +427,15 @@ export function BlameNetwork({
       const cId = communityMap.get(n.id) ?? 0;
       n.communityId = cId;
       n.communityColor = COMMUNITY_COLORS[cId % COMMUNITY_COLORS.length];
+
+      // Community-Aware Initial Positioning: place unpositioned or newly placed nodes near community orbit direction
+      if (!n._hasCommunityPos || typeof n.x !== 'number' || !isFinite(n.x) || (n.x === 0 && n.y === 0)) {
+        const angle = (cId / Math.max(1, (communities?.length || 4))) * 2 * Math.PI;
+        const dist = 180 + Math.random() * 60;
+        n.x = Math.cos(angle) * dist;
+        n.y = Math.sin(angle) * dist;
+        n._hasCommunityPos = true;
+      }
     });
 
     // Semantic Group/Cluster Naming
@@ -699,7 +710,7 @@ export function BlameNetwork({
             const sNode = typeof link.source === 'object' ? link.source : {};
             const tNode = typeof link.target === 'object' ? link.target : {};
             const isSameCommunity = sNode.communityId !== undefined && tNode.communityId !== undefined && sNode.communityId === tNode.communityId;
-            const baseDist = isSameCommunity ? 85 : 150;
+            const baseDist = isSameCommunity ? 75 : 240;
             const sR = (sNode.academicRadius || 10) * nodeScale;
             const tR = (tNode.academicRadius || 10) * nodeScale;
             const minRadiiDist = sR + tR + 40 * textScale;
@@ -707,13 +718,25 @@ export function BlameNetwork({
           });
         }
 
-        const gravityFn = n => {
-          const deg = n.degree || 1;
-          return Math.max(0.035, 0.035 + 0.035 / deg);
+        // Community Territorial Anchor Force (社群阵营专属向心力)
+        const numComms = Math.max(1, (graphData.communities || []).length);
+        const clusterOrbitRadius = 240 * spread;
+        const getClusterTarget = (n) => {
+          const cId = n.communityId ?? 0;
+          const angle = (cId / numComms) * 2 * Math.PI - Math.PI / 2;
+          return {
+            x: Math.cos(angle) * clusterOrbitRadius,
+            y: Math.sin(angle) * clusterOrbitRadius
+          };
         };
-        fgRef.current.d3Force('x', forceX(20).strength(gravityFn));
-        fgRef.current.d3Force('y', forceY(0).strength(gravityFn));
-        
+
+        fgRef.current.d3Force('clusterX', forceX(n => getClusterTarget(n).x).strength(0.075));
+        fgRef.current.d3Force('clusterY', forceY(n => getClusterTarget(n).y).strength(0.075));
+
+        // Gentle global centering gravity to keep the whole graph centered in the viewport
+        fgRef.current.d3Force('x', forceX(0).strength(0.015));
+        fgRef.current.d3Force('y', forceY(0).strength(0.015));
+
         if (typeof fgRef.current.d3ReheatSimulation === 'function') {
           fgRef.current.d3ReheatSimulation();
         }
@@ -721,7 +744,7 @@ export function BlameNetwork({
         console.error('Error setting d3 forces:', err);
       }
     }
-  }, [graphData.nodes.length, dimensions.width, dimensions.height, exportSettings]);
+  }, [graphData.nodes.length, graphData.communities, dimensions.width, dimensions.height, exportSettings]);
 
   const handleEngineStop = useCallback(() => {
     if (!hasFit.current && fgRef.current) {

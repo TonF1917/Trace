@@ -185,7 +185,7 @@ export function GraphAnalyticsView({ project, articles }) {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto bg-slate-50 p-6 text-slate-800 space-y-8 font-sans">
+    <div className="flex-1 overflow-y-auto bg-slate-50 p-4 sm:p-6 lg:p-8 text-slate-800 space-y-6 sm:space-y-8 font-sans">
       {/* Header Banner */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 pb-5">
         <div>
@@ -222,55 +222,55 @@ export function GraphAnalyticsView({ project, articles }) {
       </div>
 
       {/* Global Metrics Summary Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-        <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4">
+        <div className="bg-white border border-slate-200 rounded-2xl p-3.5 sm:p-4 shadow-sm">
           <div className="flex items-center justify-between text-slate-500 mb-2">
-            <span className="text-xs font-bold uppercase tracking-wider">{t('Total Nodes')}</span>
-            <Users className="w-4 h-4 text-blue-600" />
+            <span className="text-xs font-bold uppercase tracking-wider truncate mr-1">{t('Total Nodes')}</span>
+            <Users className="w-4 h-4 text-blue-600 shrink-0" />
           </div>
           <div className="text-2xl font-black text-slate-900">{metrics.numNodes}</div>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+        <div className="bg-white border border-slate-200 rounded-2xl p-3.5 sm:p-4 shadow-sm">
           <div className="flex items-center justify-between text-slate-500 mb-2">
-            <span className="text-xs font-bold uppercase tracking-wider">{t('Total Edges')}</span>
-            <Network className="w-4 h-4 text-cyan-600" />
+            <span className="text-xs font-bold uppercase tracking-wider truncate mr-1">{t('Total Edges')}</span>
+            <Network className="w-4 h-4 text-cyan-600 shrink-0" />
           </div>
           <div className="text-2xl font-black text-slate-900">{metrics.numLinks}</div>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+        <div className="bg-white border border-slate-200 rounded-2xl p-3.5 sm:p-4 shadow-sm">
           <div className="flex items-center justify-between text-slate-500 mb-2">
-            <span className="text-xs font-bold uppercase tracking-wider">{t('Network Density')}</span>
-            <Zap className="w-4 h-4 text-amber-600" />
+            <span className="text-xs font-bold uppercase tracking-wider truncate mr-1">{t('Network Density')}</span>
+            <Zap className="w-4 h-4 text-amber-600 shrink-0" />
           </div>
           <div className="text-2xl font-black text-slate-900">{metrics.density}</div>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+        <div className="bg-white border border-slate-200 rounded-2xl p-3.5 sm:p-4 shadow-sm">
           <div className="flex items-center justify-between text-slate-500 mb-2">
-            <span className="text-xs font-bold uppercase tracking-wider">{t('Avg Degree')}</span>
-            <Layers className="w-4 h-4 text-emerald-600" />
+            <span className="text-xs font-bold uppercase tracking-wider truncate mr-1">{t('Avg Degree')}</span>
+            <Layers className="w-4 h-4 text-emerald-600 shrink-0" />
           </div>
           <div className="text-2xl font-black text-slate-900">{metrics.avgDegree}</div>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm col-span-2 sm:col-span-1">
+        <div className="bg-white border border-slate-200 rounded-2xl p-3.5 sm:p-4 shadow-sm col-span-2 sm:col-span-1">
           <div className="flex items-center justify-between text-slate-500 mb-2">
-            <span className="text-xs font-bold uppercase tracking-wider">{t('Communities Count')}</span>
-            <Users className="w-4 h-4 text-rose-600" />
+            <span className="text-xs font-bold uppercase tracking-wider truncate mr-1">{t('Communities Count')}</span>
+            <Users className="w-4 h-4 text-rose-600 shrink-0" />
           </div>
           <div className="text-2xl font-black text-slate-900">{metrics.communityCount}</div>
         </div>
       </div>
 
       {/* Top Rankings Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
         {/* Top Hubs */}
-        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-sm space-y-4">
           <div className="flex items-center gap-2 text-blue-700 font-black border-b border-slate-100 pb-3">
-            <Award className="w-5 h-5 text-blue-600" />
-            <span>{t('Top Hubs')} (Highest Degree)</span>
+            <Award className="w-5 h-5 text-blue-600 shrink-0" />
+            <span className="truncate">{t('Top Hubs')} (Highest Degree)</span>
           </div>
           <div className="space-y-2.5">
             {metrics.topHubs.length === 0 ? (
@@ -278,8 +278,8 @@ export function GraphAnalyticsView({ project, articles }) {
             ) : (
               metrics.topHubs.map((hub, idx) => (
                 <div key={hub.id} className="flex items-center justify-between text-sm bg-slate-50 p-2.5 rounded-xl border border-slate-200/60">
-                  <span className="font-bold text-slate-800 truncate max-w-[160px]">{idx + 1}. {hub.name}</span>
-                  <span className="text-xs font-bold font-mono px-2 py-0.5 bg-blue-100 text-blue-800 border border-blue-200 rounded-md">
+                  <span className="font-bold text-slate-800 truncate flex-1 min-w-0 pr-2">{idx + 1}. {hub.name}</span>
+                  <span className="text-xs font-bold font-mono px-2 py-0.5 bg-blue-100 text-blue-800 border border-blue-200 rounded-md shrink-0">
                     Degree {hub.degree}
                   </span>
                 </div>
@@ -289,10 +289,10 @@ export function GraphAnalyticsView({ project, articles }) {
         </div>
 
         {/* Top Bridges */}
-        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-sm space-y-4">
           <div className="flex items-center gap-2 text-purple-700 font-black border-b border-slate-100 pb-3">
-            <Share2 className="w-5 h-5 text-purple-600" />
-            <span>{t('Top Bridges')} (Betweenness)</span>
+            <Share2 className="w-5 h-5 text-purple-600 shrink-0" />
+            <span className="truncate">{t('Top Bridges')} (Betweenness)</span>
           </div>
           <div className="space-y-2.5">
             {metrics.topBridges.length === 0 ? (
@@ -300,8 +300,8 @@ export function GraphAnalyticsView({ project, articles }) {
             ) : (
               metrics.topBridges.map((bridge, idx) => (
                 <div key={bridge.id} className="flex items-center justify-between text-sm bg-slate-50 p-2.5 rounded-xl border border-slate-200/60">
-                  <span className="font-bold text-slate-800 truncate max-w-[160px]">{idx + 1}. {bridge.name}</span>
-                  <span className="text-xs font-bold font-mono px-2 py-0.5 bg-purple-100 text-purple-800 border border-purple-200 rounded-md">
+                  <span className="font-bold text-slate-800 truncate flex-1 min-w-0 pr-2">{idx + 1}. {bridge.name}</span>
+                  <span className="text-xs font-bold font-mono px-2 py-0.5 bg-purple-100 text-purple-800 border border-purple-200 rounded-md shrink-0">
                     {bridge.betweenness}
                   </span>
                 </div>
@@ -311,10 +311,10 @@ export function GraphAnalyticsView({ project, articles }) {
         </div>
 
         {/* Top Targets */}
-        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-sm space-y-4">
           <div className="flex items-center gap-2 text-rose-700 font-black border-b border-slate-100 pb-3">
-            <Target className="w-5 h-5 text-rose-600" />
-            <span>{t('Top Targets')} (In-Degree)</span>
+            <Target className="w-5 h-5 text-rose-600 shrink-0" />
+            <span className="truncate">{t('Top Targets')} (In-Degree)</span>
           </div>
           <div className="space-y-2.5">
             {metrics.topTargets.length === 0 ? (
@@ -322,8 +322,8 @@ export function GraphAnalyticsView({ project, articles }) {
             ) : (
               metrics.topTargets.map((target, idx) => (
                 <div key={target.id} className="flex items-center justify-between text-sm bg-slate-50 p-2.5 rounded-xl border border-slate-200/60">
-                  <span className="font-bold text-slate-800 truncate max-w-[160px]">{idx + 1}. {target.name}</span>
-                  <span className="text-xs font-bold font-mono px-2 py-0.5 bg-rose-100 text-rose-800 border border-rose-200 rounded-md">
+                  <span className="font-bold text-slate-800 truncate flex-1 min-w-0 pr-2">{idx + 1}. {target.name}</span>
+                  <span className="text-xs font-bold font-mono px-2 py-0.5 bg-rose-100 text-rose-800 border border-rose-200 rounded-md shrink-0">
                     In-Degree {target.inDegree}
                   </span>
                 </div>
@@ -335,7 +335,7 @@ export function GraphAnalyticsView({ project, articles }) {
 
       {/* AI Topology Briefing / Synthesis Report Section */}
       {(aiReport || isGenerating || reportError) && (
-        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-sm space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
             <h2 className="text-lg font-black text-slate-900 flex items-center gap-2">
               {reportType === 'synthesis_matrix' || reportType === 'irr_matrix' ? (
@@ -352,7 +352,7 @@ export function GraphAnalyticsView({ project, articles }) {
             </h2>
 
             {aiReport && (
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <button
                   onClick={handleCopyMarkdown}
                   className={`flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded-lg border transition ${
@@ -389,7 +389,7 @@ export function GraphAnalyticsView({ project, articles }) {
               {reportError}
             </div>
           ) : (
-            <div className="prose prose-slate max-w-none text-sm leading-relaxed whitespace-pre-wrap bg-slate-50 p-6 rounded-xl border border-slate-200 font-serif-academic text-slate-900 shadow-inner overflow-x-auto">
+            <div className="prose prose-slate max-w-none text-sm leading-relaxed whitespace-pre-wrap bg-slate-50 p-4 sm:p-6 rounded-xl border border-slate-200 font-serif-academic text-slate-900 shadow-inner max-h-[600px] overflow-y-auto overflow-x-auto">
               {aiReport}
             </div>
           )}
@@ -397,7 +397,7 @@ export function GraphAnalyticsView({ project, articles }) {
       )}
 
       {/* Centrality Rankings Table */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-5">
+      <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-sm space-y-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
           <h2 className="text-lg font-black text-slate-900 flex items-center gap-2">
             <Award className="w-5 h-5 text-emerald-600" />
@@ -418,35 +418,35 @@ export function GraphAnalyticsView({ project, articles }) {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm border-collapse">
+          <table className="w-full text-left text-sm border-collapse min-w-[580px]">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50/80 text-slate-500 text-xs font-bold uppercase tracking-wider">
-                <th className="py-3 px-4">Entity</th>
-                <th className="py-3 px-4 cursor-pointer hover:text-slate-900" onClick={() => handleSort('degree')}>
+                <th className="py-2.5 px-3 sm:py-3 sm:px-4">Entity</th>
+                <th className="py-2.5 px-3 sm:py-3 sm:px-4 cursor-pointer hover:text-slate-900" onClick={() => handleSort('degree')}>
                   <div className="flex items-center gap-1">
                     {t('Degree')}
                     <ArrowUpDown className="w-3 h-3" />
                   </div>
                 </th>
-                <th className="py-3 px-4 cursor-pointer hover:text-slate-900" onClick={() => handleSort('inDegree')}>
+                <th className="py-2.5 px-3 sm:py-3 sm:px-4 cursor-pointer hover:text-slate-900" onClick={() => handleSort('inDegree')}>
                   <div className="flex items-center gap-1">
                     {t('In-Degree')}
                     <ArrowUpDown className="w-3 h-3" />
                   </div>
                 </th>
-                <th className="py-3 px-4 cursor-pointer hover:text-slate-900" onClick={() => handleSort('outDegree')}>
+                <th className="py-2.5 px-3 sm:py-3 sm:px-4 cursor-pointer hover:text-slate-900" onClick={() => handleSort('outDegree')}>
                   <div className="flex items-center gap-1">
                     {t('Out-Degree')}
                     <ArrowUpDown className="w-3 h-3" />
                   </div>
                 </th>
-                <th className="py-3 px-4 cursor-pointer hover:text-slate-900" onClick={() => handleSort('betweenness')}>
+                <th className="py-2.5 px-3 sm:py-3 sm:px-4 cursor-pointer hover:text-slate-900" onClick={() => handleSort('betweenness')}>
                   <div className="flex items-center gap-1">
                     {t('Betweenness')}
                     <ArrowUpDown className="w-3 h-3" />
                   </div>
                 </th>
-                <th className="py-3 px-4">{t('Community')}</th>
+                <th className="py-2.5 px-3 sm:py-3 sm:px-4">{t('Community')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-mono text-xs">
@@ -459,12 +459,12 @@ export function GraphAnalyticsView({ project, articles }) {
               ) : (
                 filteredMetrics.map((row) => (
                   <tr key={row.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="py-3 px-4 font-sans font-bold text-slate-800">{row.name}</td>
-                    <td className="py-3 px-4 text-blue-600 font-extrabold">{row.degree}</td>
-                    <td className="py-3 px-4 text-rose-600 font-bold">{row.inDegree}</td>
-                    <td className="py-3 px-4 text-cyan-600 font-bold">{row.outDegree}</td>
-                    <td className="py-3 px-4 text-purple-600 font-bold">{row.betweenness}</td>
-                    <td className="py-3 px-4">
+                    <td className="py-2.5 px-3 sm:py-3 sm:px-4 font-sans font-bold text-slate-800">{row.name}</td>
+                    <td className="py-2.5 px-3 sm:py-3 sm:px-4 text-blue-600 font-extrabold">{row.degree}</td>
+                    <td className="py-2.5 px-3 sm:py-3 sm:px-4 text-rose-600 font-bold">{row.inDegree}</td>
+                    <td className="py-2.5 px-3 sm:py-3 sm:px-4 text-cyan-600 font-bold">{row.outDegree}</td>
+                    <td className="py-2.5 px-3 sm:py-3 sm:px-4 text-purple-600 font-bold">{row.betweenness}</td>
+                    <td className="py-2.5 px-3 sm:py-3 sm:px-4">
                       <span
                         className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-sans font-bold"
                         style={{ backgroundColor: row.communityColor + '1a', color: row.communityColor, border: `1px solid ${row.communityColor}44` }}

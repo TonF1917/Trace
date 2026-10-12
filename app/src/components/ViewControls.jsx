@@ -53,9 +53,9 @@ export function ViewControls({
                 ? 'bg-white shadow-xs text-indigo-600'
                 : 'text-slate-500 hover:text-slate-700'
             }`}
-            title={t('Group by community detection algorithm (Louvain clustering)')}
+            title={t('Group by political factions & ideological alliances')}
           >
-            {t('Louvain')}
+            {t('Factions')}
           </button>
           <button
             type="button"

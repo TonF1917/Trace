@@ -1,4 +1,5 @@
 import React, { useMemo, useRef, useEffect, useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import ForceGraph2D from 'react-force-graph-2d';
 import { forceX, forceY, forceCollide } from 'd3-force';
 import { detectCommunitiesLouvain, COMMUNITY_COLORS, calculateDegreeCentrality } from '../utils/graphAnalytics';
@@ -55,6 +56,72 @@ const getConvexHull = (points) => {
   return lower.concat(upper);
 };
 
+export const deriveFactionName = (memberNodes, commId) => {
+  if (!memberNodes || memberNodes.length === 0) {
+    return `Faction ${commId + 1}`;
+  }
+
+  const allNames = memberNodes.map(n => (n.name || '').toLowerCase());
+  const hasKeyword = (...kws) => kws.some(kw => allNames.some(n => n.includes(kw.toLowerCase())));
+
+  // Check known political / historical factions (NEP 1921 & Soviet era)
+  if (hasKeyword('trotsky', 'left opposition', 'declaration of the 46')) {
+    return 'Left Opposition (Trotsky)';
+  }
+  if (hasKeyword('bukharin', 'right opposition', 'rykov', 'tomsky')) {
+    return 'Right Opposition (Bukharin)';
+  }
+  if (hasKeyword('lenin', 'party bureaucracy', 'old bolsheviks', 'politburo', 'central committee')) {
+    if (hasKeyword('lenin') && hasKeyword('party bureaucracy')) {
+      return 'Lenin & Party Core';
+    }
+    if (hasKeyword('lenin')) {
+      return 'Lenin & Party Core';
+    }
+    return 'Party Bureaucracy & Core';
+  }
+  if (hasKeyword('kulak', 'peasant', 'peasantry', 'muzhik', 'village commune')) {
+    return 'Peasantry & Kulaks';
+  }
+  if (hasKeyword('nepmen', 'private trade', 'merchant', 'retail capital')) {
+    return 'NEPmen & Private Trade';
+  }
+  if (hasKeyword('industrial proletariat', 'worker', 'workers opposition', 'trade union')) {
+    return 'Industrial Proletariat';
+  }
+  if (hasKeyword('gosplan', 'concession', 'state capitalism', 'foreign concessionaires', 'vesenkha')) {
+    return 'Gosplan & Concessions';
+  }
+  if (hasKeyword('cheka', 'ogpu', 'red army', 'security')) {
+    return 'Security & Red Army';
+  }
+  if (hasKeyword('socialist revolutionary', 'menshevik', 'sr remnants')) {
+    return 'Socialist Opposition';
+  }
+
+  // Dynamic derivation for general projects
+  const top1 = memberNodes[0];
+  const top2 = memberNodes[1];
+
+  if (top1 && top2 && memberNodes.length >= 2) {
+    const combined = `${top1.name} & ${top2.name}`;
+    if (combined.length <= 26 && (top2.degree || 0) >= 2) {
+      return combined;
+    }
+  }
+
+  if (top1) {
+    const tName = top1.name;
+    const isCollective = /(party|opposition|union|faction|alliance|bloc|bureaucracy|movement|front|coalition|committee|proletariat|peasantry|class|corps|forces)$/i.test(tName.trim());
+    if (isCollective || memberNodes.length < 3) {
+      return tName;
+    }
+    return `${tName} Bloc`;
+  }
+
+  return `Faction ${commId + 1}`;
+};
+
 export function BlameNetwork({
   allArticles,
   filteredArticles,
@@ -76,6 +143,7 @@ export function BlameNetwork({
   setLegendGroupMode: propSetLegendGroupMode,
   onLinkSelected
 }) {
+  const { t } = useTranslation();
   const RELATION_COLORS = useMemo(() => ({ ...DEFAULT_RELATION_COLORS, ...relationColors }), [relationColors]);
   const containerRef = useRef(null);
   // Reference to the ForceGraph component
@@ -431,7 +499,7 @@ export function BlameNetwork({
       n.communityColor = COMMUNITY_COLORS[cId % COMMUNITY_COLORS.length];
     });
 
-    // Semantic Group/Cluster Naming
+    // Semantic Faction & Alliance Naming
     const articleMap = new Map();
     (allArticles || []).forEach(a => articleMap.set(a.id, a));
     (filteredArticles || []).forEach(a => articleMap.set(a.id, a));
@@ -451,17 +519,6 @@ export function BlameNetwork({
         if (degDiff !== 0) return degDiff;
         return (b.rawVal || 0) - (a.rawVal || 0);
       });
-
-      const top1 = memberNodes[0];
-      const top2 = memberNodes[1];
-
-      let coreActor = top1 ? top1.name : `Cluster ${comm.id + 1}`;
-      if (top1 && top2 && memberNodes.length >= 2) {
-        const combined = `${top1.name} & ${top2.name}`;
-        if (combined.length <= 26 && (top2.degree || 0) >= 2) {
-          coreActor = combined;
-        }
-      }
 
       // 3. Find the most frequent narrative frame
       const frameCounts = new Map();
@@ -520,7 +577,11 @@ export function BlameNetwork({
         }
       }
 
-      comm.title = dominantFrame ? `${coreActor} · ${dominantFrame}` : `${coreActor} · Faction`;
+      const factionName = deriveFactionName(memberNodes, comm.id);
+      comm.factionName = factionName;
+      comm.dominantFrame = dominantFrame;
+      comm.fullTitle = dominantFrame ? `${factionName} · ${dominantFrame}` : `${factionName} · Faction`;
+      comm.title = comm.fullTitle;
     });
 
     return {
@@ -564,6 +625,9 @@ export function BlameNetwork({
       .map(comm => ({
         id: comm.id,
         title: comm.title,
+        factionName: comm.factionName,
+        dominantFrame: comm.dominantFrame,
+        fullTitle: comm.fullTitle,
         memberIds: comm.members,
         color: comm.color || COMMUNITY_COLORS[comm.id % COMMUNITY_COLORS.length]
       }));
@@ -630,7 +694,14 @@ export function BlameNetwork({
       // When legendGroupMode !== 'community', do not draw community badges
       if (legendGroupMode !== 'community') return;
 
-      // Intelligently position floating cluster badge strictly outside the convex hull with collision avoidance
+      // Only draw badges in resting state for major factions (group.memberIds.length >= 3).
+      // Micro-groups (1-2 nodes) do not stamp badges in resting state to keep canvas clean,
+      // but highlight when hovered/active.
+      if (!isGroupActive && (!group.memberIds || group.memberIds.length < 3)) {
+        return;
+      }
+
+      // Intelligently position floating faction badge strictly outside the convex hull with collision avoidance
       let minHullY = Infinity, maxHullY = -Infinity;
       let minHullX = Infinity, maxHullX = -Infinity;
       let sumX = 0;
@@ -647,10 +718,12 @@ export function BlameNetwork({
       });
       const centroidX = sumX / hull.length;
 
-      // Full semantic title is already in Legend list; on canvas, show compact badge in resting state
+      // Full substantive faction identity in resting state, expanded with frame & count when active
+      const factionLabel = group.factionName || group.title || `Faction ${group.id + 1}`;
+      const dominant = group.dominantFrame || '';
       const badgeText = isGroupActive
-        ? `${group.title || ('Cluster ' + (group.id + 1))} (${group.memberIds.length})`
-        : `Cluster ${group.id + 1}`;
+        ? (dominant ? `${factionLabel} · ${dominant} (${group.memberIds.length} nodes)` : `${factionLabel} (${group.memberIds.length} nodes)`)
+        : factionLabel;
       const textScale = exportSettings?.textScale ?? 1.0;
       const badgeFontSize = (isGroupActive ? 10.5 : 8.5) * textScale;
       const fontFam = fontFamily === 'serif' ? '"Times New Roman", Times, serif' : 'Inter, -apple-system, sans-serif';
@@ -695,7 +768,7 @@ export function BlameNetwork({
       const pillX = bestX - pillWidth / 2;
       const pillY = bestY - pillHeight / 2;
 
-      // Register badge occupied rect so edge labels avoid drawing over the cluster badge
+      // Register badge occupied rect so edge labels avoid drawing over the faction badge
       labelOccupiedRects.current.push({ x: bestX, y: bestY });
 
       ctx.save();
@@ -743,7 +816,7 @@ export function BlameNetwork({
           return (r + (24 + textWidthBuffer * 0.7) * textScale);
         }).strength(1.0).iterations(12));
 
-        // 2. Strong degree-weighted repulsion so hubs & dense clusters have ample breathing room
+        // 2. Strong degree-weighted repulsion so hubs & dense factions have ample breathing room
         const chargeForce = fgRef.current.d3Force('charge');
         if (chargeForce && typeof chargeForce.strength === 'function') {
           chargeForce.strength(n => {
@@ -1042,7 +1115,7 @@ export function BlameNetwork({
         textY += normalY * fanOffset;
       }
 
-      // Check collision with node labels or cluster badges
+      // Check collision with node labels or faction badges
       const collisionThreshold = 24 * textScale;
       let collidesWithLabel = labelOccupiedRects.current.some(rect => {
         return Math.hypot(rect.x - textX, rect.y - textY) < collisionThreshold;
@@ -1301,36 +1374,36 @@ export function BlameNetwork({
                       className={`flex-1 py-0.5 text-center rounded transition-all cursor-pointer ${
                         legendGroupMode === 'community' ? 'bg-white shadow-2xs font-bold text-slate-800' : 'text-slate-500 hover:text-slate-700'
                       }`}
-                      title="Group by Louvain algorithmic communities"
+                      title={t('Group by political factions & ideological alliances')}
                     >
-                      Louvain
+                      {t('Factions')}
                     </button>
                     <button
                       onClick={() => { setLegendGroupMode('centrality'); setSelectedCommunity(null); }}
                       className={`flex-1 py-0.5 text-center rounded transition-all cursor-pointer ${
                         legendGroupMode === 'centrality' ? 'bg-white shadow-2xs font-bold text-slate-800' : 'text-slate-500 hover:text-slate-700'
                       }`}
-                      title="Group by network centrality tiers (Hubs, Bridges, Periphery)"
+                      title={t('Group by network centrality tiers (Hubs, Bridges, Periphery)')}
                     >
-                      Centrality
+                      {t('Centrality')}
                     </button>
                     <button
                       onClick={() => { setLegendGroupMode('stance'); setSelectedCommunity(null); }}
                       className={`flex-1 py-0.5 text-center rounded transition-all cursor-pointer ${
                         legendGroupMode === 'stance' ? 'bg-white shadow-2xs font-bold text-slate-800' : 'text-slate-500 hover:text-slate-700'
                       }`}
-                      title="Group by actor stance (Blamers, Targets, Neutral)"
+                      title={t('Group by actor blame stance (Accusers, Targets, Neutral)')}
                     >
-                      Stance
+                      {t('Stance')}
                     </button>
                     <button
                       onClick={() => { setLegendGroupMode('none'); setSelectedCommunity(null); }}
                       className={`flex-1 py-0.5 text-center rounded transition-all cursor-pointer ${
                         legendGroupMode === 'none' ? 'bg-white shadow-2xs font-bold text-slate-800' : 'text-slate-500 hover:text-slate-700'
                       }`}
-                      title="Uniform single color for all nodes"
+                      title={t('Uniform node colors without grouping')}
                     >
-                      Uniform
+                      {t('Uniform')}
                     </button>
                   </div>
                 )}
@@ -1351,10 +1424,11 @@ export function BlameNetwork({
                           const topNodeId = (comm.members || [])
                             .slice()
                             .sort((a, b) => (nodeMap.get(b)?.degree || 0) - (nodeMap.get(a)?.degree || 0))[0];
-                          const topName = nodeMap.get(topNodeId)?.name || `Group ${i + 1}`;
+                          const topName = nodeMap.get(topNodeId)?.name || `Faction ${i + 1}`;
                           const isSelected = selectedCommunity === comm.id;
                           const isHovered = hoveredGroup === comm.id;
                           const isActive = isSelected || isHovered;
+                          const factionDisplayName = comm.factionName || comm.title || topName;
                           return (
                             <div
                               key={comm.id}
@@ -1366,8 +1440,10 @@ export function BlameNetwork({
                               }`}
                             >
                               <span className="w-3.5 h-[3px] rounded-full shrink-0" style={{ backgroundColor: color }} />
-                              <span className="text-slate-400 text-[10px] font-mono shrink-0">{`G${i + 1}`}</span>
-                              <span className="truncate flex-1" title={comm.title || topName}>{comm.title || comm.name || topName}</span>
+                              <span className="text-slate-400 text-[10px] font-mono shrink-0">{`F${i + 1}`}</span>
+                              <span className="truncate flex-1" title={comm.fullTitle || comm.title || factionDisplayName}>
+                                {factionDisplayName}
+                              </span>
                               <span className="text-[9.5px] text-slate-400 font-mono">({comm.members?.length || 0})</span>
                             </div>
                           );

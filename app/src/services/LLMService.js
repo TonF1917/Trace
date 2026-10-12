@@ -515,8 +515,8 @@ Report Structure to follow:
 - **主要叙事发起方 (Top Accusers - High Out-Degree)**: 谁在主导议题和推动指责？
 - **跨阵营枢纽/桥梁角色 (Key Bridges - High Betweenness Centrality)**: 哪些实体连接了不同的叙事群体？
 
-## 3. 社群阵营与叙事分化 (Louvain Community Clusters)
-- 逐一剖析每个主要社群的核心成员与主要关系框架。
+## 3. 政治派系与观点阵营分析 (Political Factions & Ideological Alliances)
+- 逐一剖析每个主要派系的核心成员与主要关系框架。
 
 ## 4. 学术研判与策略结论 (Academic Insights & Takeaways)
 - 提炼该舆情/事件中的核心叙事陷阱或舆论裂隙。
@@ -529,7 +529,7 @@ Report Structure to follow:
   const topHubsStr = metrics.topHubs.map(h => `${h.name} (Degree: ${h.degree}, In: ${h.inDegree}, Out: ${h.outDegree})`).join('; ');
   const topBridgesStr = metrics.topBridges.map(b => `${b.name} (Betweenness: ${b.betweenness})`).join('; ');
   const topTargetsStr = metrics.topTargets.map(t => `${t.name} (In-Degree: ${t.inDegree})`).join('; ');
-  const communitiesStr = metrics.communities.map(c => `[Community ${c.id + 1} (${c.members.length} members)]: ${c.members.join(', ')}`).join('\n');
+  const communitiesStr = metrics.communities.map(c => `[Faction ${c.id + 1} (${c.members.length} members)]: ${c.members.join(', ')}`).join('\n');
 
   const userPrompt = `Project Context:
 Project Name: ${project.name}
@@ -547,7 +547,7 @@ Key Node Rankings:
 - Top Bridge Actors (Betweenness): ${topBridgesStr}
 - Top Blame Targets (In-Degree): ${topTargetsStr}
 
-Community Clusters (Louvain):
+Political Factions & Alliances (Louvain):
 ${communitiesStr}
 
 Please generate the complete Markdown analysis report.`;

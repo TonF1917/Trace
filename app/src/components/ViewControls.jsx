@@ -6,6 +6,8 @@ export function ViewControls({
   showSourceNodes, setShowSourceNodes,
   showFrequencies, setShowFrequencies,
   showGroupEnclosures, setShowGroupEnclosures,
+  showGroupBadges = true, setShowGroupBadges,
+  showGroupLabels, setShowGroupLabels,
   showCurvedEdges, setShowCurvedEdges,
   showEdgeLabels = true, setShowEdgeLabels,
   fontFamily, setFontFamily,
@@ -116,13 +118,25 @@ export function ViewControls({
           {t('Freq')}
         </label>
         <label className="flex items-center gap-1.5 text-xs font-bold text-slate-600 cursor-pointer hover:text-slate-800">
-          <input 
-            type="checkbox" 
-            checked={showGroupEnclosures} 
+          <input
+            type="checkbox"
+            checked={showGroupEnclosures}
             onChange={(e) => setShowGroupEnclosures(e.target.checked)}
             className="rounded text-teal-600 focus:ring-teal-500 cursor-pointer"
           />
           {t('Groups')}
+        </label>
+        <label className="flex items-center gap-1.5 text-xs font-bold text-slate-600 cursor-pointer hover:text-slate-800">
+          <input
+            type="checkbox"
+            checked={(showGroupBadges ?? showGroupLabels) ?? true}
+            onChange={(e) => {
+              if (setShowGroupBadges) setShowGroupBadges(e.target.checked);
+              if (setShowGroupLabels) setShowGroupLabels(e.target.checked);
+            }}
+            className="rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+          />
+          {t('Badges')}
         </label>
         <label className="flex items-center gap-1.5 text-xs font-bold text-slate-600 cursor-pointer hover:text-slate-800">
           <input

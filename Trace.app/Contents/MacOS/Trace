@@ -1,0 +1,33 @@
+#!/bin/bash
+# ==============================================================================
+# Trace - macOS Application Launcher
+# ==============================================================================
+
+# Resolve the project root directory
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+APP_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+
+cd "$APP_ROOT"
+
+# Check Node.js runtime
+if ! command -v node &> /dev/null; then
+    osascript -e 'display alert "Node.js Not Found" message "Trace requires Node.js to run. Please install Node.js from https://nodejs.org or via Homebrew (brew install node)." as critical'
+    exit 1
+fi
+
+# Check and install dependencies if needed
+if [ ! -d "app/node_modules" ]; then
+    osascript -e 'display notification "Installing dependencies for first-time launch..." with title "Trace"'
+    cd app && npm install && cd ..
+fi
+
+cd app
+
+# Open browser after a brief delay
+(
+    sleep 2
+    open "http://localhost:5173"
+) &
+
+# Launch Vite dev server
+exec npm run dev

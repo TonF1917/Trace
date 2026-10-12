@@ -136,6 +136,7 @@ export function BlameNetwork({
   showSourceNodes,
   showFrequencies,
   showGroupEnclosures = true,
+  showGroupBadges = true,
   showCurvedEdges = true,
   showEdgeLabels = true,
   fontFamily = 'serif',
@@ -624,7 +625,7 @@ export function BlameNetwork({
 
   // Clean, non-overlapping community enclosures
   const enclosureGroups = useMemo(() => {
-    if (!showGroupEnclosures || !graphData.communities) return [];
+    if ((!showGroupEnclosures && !showGroupBadges) || !graphData.communities) return [];
 
     return graphData.communities
       .filter(comm => comm.members && comm.members.length >= 2)
@@ -637,13 +638,13 @@ export function BlameNetwork({
         memberIds: comm.members,
         color: comm.color || COMMUNITY_COLORS[comm.id % COMMUNITY_COLORS.length]
       }));
-  }, [graphData.communities, showGroupEnclosures]);
+  }, [graphData.communities, showGroupEnclosures, showGroupBadges]);
 
   const drawEnclosures = useCallback((ctx, globalScale) => {
     // Clear per-frame label collision list at the start of every frame
     labelOccupiedRects.current = [];
 
-    if (!showGroupEnclosures || enclosureGroups.length === 0) return;
+    if ((!showGroupEnclosures && !showGroupBadges) || enclosureGroups.length === 0) return;
 
     const nodeMap = new Map();
     persistentNodes.current.forEach(n => nodeMap.set(n.id, n));
@@ -676,29 +677,32 @@ export function BlameNetwork({
       }
 
       const isGroupActive = activeGroupFilter === group.id && legendGroupMode === 'community';
-      ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${isGroupActive ? 0.35 : 0.20})`;
-      ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${isGroupActive ? 0.96 : 0.78})`;
-
       const edgeScale = exportSettings?.edgeScale || 1;
-      ctx.lineWidth = (isGroupActive ? 3.2 : 2.2) * edgeScale;
-      ctx.lineJoin = 'round';
-      if (isGroupActive) {
-        ctx.setLineDash([]);
-      } else {
-        ctx.setLineDash([4 * edgeScale, 4 * edgeScale]);
+
+      if (showGroupEnclosures) {
+        ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${isGroupActive ? 0.35 : 0.20})`;
+        ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${isGroupActive ? 0.96 : 0.78})`;
+
+        ctx.lineWidth = (isGroupActive ? 3.2 : 2.2) * edgeScale;
+        ctx.lineJoin = 'round';
+        if (isGroupActive) {
+          ctx.setLineDash([]);
+        } else {
+          ctx.setLineDash([4 * edgeScale, 4 * edgeScale]);
+        }
+
+        ctx.beginPath();
+        hull.forEach((pt, i) => {
+          if (i === 0) ctx.moveTo(pt.x, pt.y);
+          else ctx.lineTo(pt.x, pt.y);
+        });
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
       }
 
-      ctx.beginPath();
-      hull.forEach((pt, i) => {
-        if (i === 0) ctx.moveTo(pt.x, pt.y);
-        else ctx.lineTo(pt.x, pt.y);
-      });
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-
-      // When legendGroupMode !== 'community', do not draw community badges
-      if (legendGroupMode !== 'community') return;
+      // When showGroupBadges is disabled, or legendGroupMode !== 'community', do not draw community badges
+      if (!showGroupBadges || legendGroupMode !== 'community') return;
 
       if (!group.memberIds || group.memberIds.length < 2) {
         return;
@@ -850,7 +854,7 @@ export function BlameNetwork({
       ctx.restore();
     });
     ctx.restore();
-  }, [enclosureGroups, showGroupEnclosures, exportSettings, persistentNodes, activeGroupFilter, legendGroupMode, fontFamily]);
+  }, [enclosureGroups, showGroupEnclosures, showGroupBadges, exportSettings, persistentNodes, activeGroupFilter, legendGroupMode, fontFamily]);
 
   const [hasInitialized, setHasInitialized] = useState(false);
 
@@ -1299,13 +1303,17 @@ export function BlameNetwork({
         {/* Modern HTML Legend Overlay — collapsible, responsive, zero overlap */}
         {(!isExporting || (exportSettings?.showLegend ?? true)) && (
           <div
-            className={`absolute top-6 left-6 z-10 bg-white/95 backdrop-blur-md border border-slate-200/90 shadow-sm rounded-xl p-3 max-h-[85vh] overflow-y-auto text-xs select-none transition-all duration-200 ${
+            className={`absolute top-6 left-6 z-10 bg-white/95 backdrop-blur-md border border-slate-200/90 shadow-sm rounded-xl p-3 text-xs select-none transition-all duration-200 ${
+              isExporting ? 'overflow-hidden max-h-none' : 'max-h-[85vh] overflow-y-auto'
+            } ${
               isLegendCollapsed ? 'w-auto' : 'w-[220px]'
             }`}
             style={{
               fontFamily: fontFamily === 'serif' ? '"Times New Roman", Times, serif' : 'Inter, -apple-system, sans-serif',
               transform: `scale(${exportScale})`,
-              transformOrigin: 'top left'
+              transformOrigin: 'top left',
+              scrollbarWidth: isExporting ? 'none' : 'auto',
+              msOverflowStyle: isExporting ? 'none' : 'auto'
             }}
           >
           {/* Legend Header with Collapse Toggle */}

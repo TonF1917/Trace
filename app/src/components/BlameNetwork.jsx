@@ -62,26 +62,32 @@ export const deriveFactionName = (memberNodes, commId) => {
   }
 
   const allNames = memberNodes.map(n => (n.name || '').toLowerCase());
+  const topNames = allNames.slice(0, 2);
   const hasKeyword = (...kws) => kws.some(kw => allNames.some(n => n.includes(kw.toLowerCase())));
+  const topHasKeyword = (...kws) => kws.some(kw => topNames.some(n => n.includes(kw.toLowerCase())));
 
-  // Check known political / historical factions (NEP 1921 & Soviet era)
-  if (hasKeyword('trotsky', 'left opposition', 'declaration of the 46')) {
+  // Check known political / historical factions (NEP 1921 & Soviet era) prioritizing community hub nodes
+  if (hasKeyword('lenin') && hasKeyword('new economic policy')) {
+    return 'Lenin & Party Core';
+  }
+  if (topHasKeyword('party bureaucracy', 'stalin') && !topHasKeyword('trotsky')) {
+    return 'Party Bureaucracy & Core';
+  }
+  if (topHasKeyword('trotsky', 'left opposition') || hasKeyword('declaration of the 46')) {
     return 'Left Opposition (Trotsky)';
+  }
+  if (hasKeyword('kulak', 'peasant', 'peasantry', 'muzhik', 'village commune')) {
+    if (hasKeyword('bukharin')) return 'Right Opposition (Bukharin)';
+    return 'Peasantry & Kulaks';
   }
   if (hasKeyword('bukharin', 'right opposition', 'rykov', 'tomsky')) {
     return 'Right Opposition (Bukharin)';
   }
   if (hasKeyword('lenin', 'party bureaucracy', 'old bolsheviks', 'politburo', 'central committee')) {
-    if (hasKeyword('lenin') && hasKeyword('party bureaucracy')) {
-      return 'Lenin & Party Core';
-    }
     if (hasKeyword('lenin')) {
       return 'Lenin & Party Core';
     }
     return 'Party Bureaucracy & Core';
-  }
-  if (hasKeyword('kulak', 'peasant', 'peasantry', 'muzhik', 'village commune')) {
-    return 'Peasantry & Kulaks';
   }
   if (hasKeyword('nepmen', 'private trade', 'merchant', 'retail capital')) {
     return 'NEPmen & Private Trade';

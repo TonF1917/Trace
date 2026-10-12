@@ -589,14 +589,14 @@ export function BlameNetwork({ allArticles, filteredArticles, sources, hoveredAr
         }
       }
 
-      const alpha = isHighlighted ? 1 : 0.15;
+      const alpha = isHighlighted ? 1 : 0.28;
       // Apply group dimming on top of highlight alpha
-      const effectiveAlpha = isGroupDimmed ? Math.min(alpha, 0.08) : alpha;
+      const effectiveAlpha = isGroupDimmed ? Math.min(alpha, 0.28) : alpha;
       const nodeRadius = (node.academicRadius || 10) * (exportSettings?.nodeScale ?? 0.8);
       const safeName = node.name || 'Unknown';
       const label = showFrequencies && node.group !== 'source' ? `${safeName} (${node.rawVal || 0})` : safeName;
 
-      ctx.globalAlpha = effectiveAlpha;
+      ctx.globalAlpha = Math.max(0.28, effectiveAlpha);
       ctx.beginPath();
       ctx.arc(node.x, node.y, nodeRadius, 0, 2 * Math.PI, false);
       ctx.fillStyle = node.color || '#94a3b8';
@@ -608,11 +608,10 @@ export function BlameNetwork({ allArticles, filteredArticles, sources, hoveredAr
       const shouldDrawLabel = true;
       if ((!isFilteredOut || alpha > 0.05) && shouldDrawLabel) {
         const textScale = exportSettings?.textScale ?? 1.0;
-        const sizeRatio = Math.max(0.75, Math.min(1.8, nodeRadius / 15));
-        const baseFontSize = node.group === 'source' ? 12 : (10 * sizeRatio);
+        const baseFontSize = node.group === 'source' ? 12 : Math.max(11, 10 + Math.min(5, (node.degree || 1)));
         const fontSize = baseFontSize * textScale;
         const fontFam = fontFamily === 'serif' ? '"Times New Roman", Times, serif' : 'Inter, -apple-system, sans-serif';
-        const fontWeight = isHighlighted ? 'bold' : (sizeRatio > 1.2 ? 'bold' : 'normal');
+        const fontWeight = isHighlighted ? 'bold' : ((node.degree || 1) >= 4 ? 'bold' : 'normal');
         ctx.font = `${fontWeight} ${fontSize}px ${fontFam}`;
 
         const words = label.split(' ');
@@ -638,13 +637,13 @@ export function BlameNetwork({ allArticles, filteredArticles, sources, hoveredAr
         // Register node label position so edge labels avoid drawing over node text
         labelOccupiedRects.current.push({ x: textX, y: labelCenterY });
 
-        ctx.globalAlpha = (isFilteredOut || isGroupDimmed) ? 0.06 : effectiveAlpha;
+        ctx.globalAlpha = (isFilteredOut || isGroupDimmed) ? 0.28 : Math.max(0.28, effectiveAlpha);
         ctx.textAlign = 'center';
         ctx.textBaseline = 'top';
 
-        // White stroke halo to isolate label text cleanly from edges and background
+        // White stroke halo to isolate label text cleanly from edges and background without drowning glyphs
         ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 6 * textScale;
+        ctx.lineWidth = Math.min(2.5, Math.max(1.5, fontSize * 0.2));
         ctx.lineJoin = 'round';
         ctx.miterLimit = 2;
 
@@ -703,7 +702,7 @@ export function BlameNetwork({ allArticles, filteredArticles, sources, hoveredAr
     const scale = exportSettings?.nodeScale ?? 0.8;
 
     // If nodes are too close, skip rendering to avoid clutter
-    if (dist < 50 * scale) return;
+    if (dist < 22 * scale) return;
 
     const curvature = showCurvedEdges ? (link.dynamicCurvature || 0) : 0;
 
@@ -741,32 +740,6 @@ export function BlameNetwork({ allArticles, filteredArticles, sources, hoveredAr
 
     const textScale = exportSettings?.textScale ?? 1.0;
 
-    // --- Strict Edge Label Avoidance ---
-    // 1. Skip if edge label lands inside any node circle or near any node text label
-    const collidesWithNodeOrLabel = (graphData.nodes || []).some(n => {
-      const nr = (n.academicRadius || 10) * scale + 22 * scale;
-      // Circle collision check
-      if (Math.hypot(n.x - textPos.x, n.y - textPos.y) < nr) return true;
-
-      // Node text label bounding box collision check
-      const labelY = n.y + (n.academicRadius || 10) * scale + 10 * textScale;
-      const labelHalfW = Math.max(35, (n.name || '').length * 4.8 * textScale);
-      const labelHalfH = 14 * textScale;
-      if (Math.abs(n.x - textPos.x) < labelHalfW + 18 && Math.abs(labelY - textPos.y) < labelHalfH + 14) {
-        return true;
-      }
-      return false;
-    });
-    if (collidesWithNodeOrLabel) return;
-
-    // 2. Skip if edge label collides with an already-drawn edge label
-    const minCanvasDist = 32 * textScale;
-    const occupied = labelOccupiedRects.current;
-    if (occupied.some(p => Math.hypot(p.x - textPos.x, p.y - textPos.y) < minCanvasDist)) {
-      return; // Skip — too close to another edge label
-    }
-    occupied.push({ x: textPos.x, y: textPos.y });
-
     let angle = Math.atan2(tangentY, tangentX);
     // Keep text upright
     if (angle > Math.PI / 2 || angle < -Math.PI / 2) {
@@ -778,24 +751,25 @@ export function BlameNetwork({ allArticles, filteredArticles, sources, hoveredAr
     ctx.rotate(angle);
 
     const activeFontFam = fontFamily === 'serif' ? '"Times New Roman", Times, serif' : 'Inter, -apple-system, sans-serif';
-    ctx.font = `${fontFamily === 'serif' ? 'italic ' : '500 '}${12 * (exportSettings?.textScale || 1)}px ${activeFontFam}`;
-    const alpha = isHighlighted ? 0.95 : 0.40;
+    const edgeFontSize = 10.5 * textScale;
+    ctx.font = `${fontFamily === 'serif' ? 'italic ' : '500 '}${edgeFontSize}px ${activeFontFam}`;
+    const alpha = isHighlighted ? 0.95 : 0.45;
 
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
     ctx.globalAlpha = alpha;
 
-    // White text stroke halo to isolate text cleanly from underlying lines
+    // Crisp 2.5px white stroke halo to isolate text cleanly from underlying lines without drowning letterforms
     ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 5 * (exportSettings?.textScale || 1);
+    ctx.lineWidth = 2.5;
     ctx.lineJoin = 'round';
     ctx.miterLimit = 2;
     ctx.strokeText(relLabel, 0, 0);
 
-    ctx.fillStyle = `rgba(15, 23, 42, ${alpha})`;
+    ctx.fillStyle = isHighlighted ? '#0f172a' : '#334155';
     ctx.fillText(relLabel, 0, 0);
-    
+
     ctx.restore();
     } catch (err) {}
   }, [hoveredArticle, activeArticleIds, filteredArticles, allArticles, graphMode, showCurvedEdges, fontFamily, exportSettings, labelOccupiedRects]);

@@ -606,11 +606,11 @@ export function BlameNetwork({
       }
 
       const isGroupActive = activeGroupFilter === group.id && legendGroupMode === 'community';
-      ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${isGroupActive ? 0.20 : 0.045})`;
-      ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${isGroupActive ? 0.85 : 0.38})`;
+      ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${isGroupActive ? 0.22 : 0.035})`;
+      ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${isGroupActive ? 0.85 : 0.30})`;
 
       const edgeScale = exportSettings?.edgeScale || 1;
-      ctx.lineWidth = (isGroupActive ? 2.5 : 1.2) * edgeScale;
+      ctx.lineWidth = (isGroupActive ? 2.5 : 1.0) * edgeScale;
       ctx.lineJoin = 'round';
       if (isGroupActive) {
         ctx.setLineDash([]);
@@ -626,6 +626,9 @@ export function BlameNetwork({
       ctx.closePath();
       ctx.fill();
       ctx.stroke();
+
+      // When legendGroupMode !== 'community', do not draw community badges
+      if (legendGroupMode !== 'community') return;
 
       // Intelligently position floating cluster badge strictly outside the convex hull with collision avoidance
       let minHullY = Infinity, maxHullY = -Infinity;
@@ -644,25 +647,29 @@ export function BlameNetwork({
       });
       const centroidX = sumX / hull.length;
 
-      const badgeText = `${group.title || ('Cluster ' + (group.id + 1))} (${group.memberIds.length})`;
-      const badgeFontSize = 9.5 * (exportSettings?.textScale ?? 1.0);
+      // Full semantic title is already in Legend list; on canvas, show compact badge in resting state
+      const badgeText = isGroupActive
+        ? `${group.title || ('Cluster ' + (group.id + 1))} (${group.memberIds.length})`
+        : `Cluster ${group.id + 1}`;
+      const textScale = exportSettings?.textScale ?? 1.0;
+      const badgeFontSize = (isGroupActive ? 10.5 : 8.5) * textScale;
       const fontFam = fontFamily === 'serif' ? '"Times New Roman", Times, serif' : 'Inter, -apple-system, sans-serif';
-      ctx.font = `bold ${badgeFontSize}px ${fontFam}`;
+      ctx.font = `${isGroupActive ? 'bold' : '600'} ${badgeFontSize}px ${fontFam}`;
       const textMetrics = ctx.measureText(badgeText);
       const textWidth = textMetrics.width;
-      const pillWidth = textWidth + 14;
-      const pillHeight = badgeFontSize + 7;
+      const pillWidth = textWidth + (isGroupActive ? 16 : 10);
+      const pillHeight = badgeFontSize + (isGroupActive ? 8 : 5);
       const pillRadius = pillHeight / 2;
 
       // Candidate placement positions:
       // Try placing safely above the apex outside the hull, clamped within hull X span
       const candidateX = Math.max(minHullX + pillWidth / 2, Math.min(maxHullX - pillWidth / 2, (apexPt.x + centroidX) / 2));
       const testOffsets = [
-        minHullY - (pillHeight / 2 + 16 * edgeScale),
-        minHullY - (pillHeight / 2 + 28 * edgeScale),
-        minHullY - (pillHeight / 2 + 40 * edgeScale),
-        maxHullY + (pillHeight / 2 + 16 * edgeScale),
-        maxHullY + (pillHeight / 2 + 28 * edgeScale)
+        minHullY - (pillHeight / 2 + 18 * edgeScale),
+        minHullY - (pillHeight / 2 + 30 * edgeScale),
+        minHullY - (pillHeight / 2 + 42 * edgeScale),
+        maxHullY + (pillHeight / 2 + 18 * edgeScale),
+        maxHullY + (pillHeight / 2 + 30 * edgeScale)
       ];
 
       // Perform node collision check across all nodes in the graph
@@ -673,7 +680,7 @@ export function BlameNetwork({
         let collides = false;
         for (const n of persistentNodes.current.values()) {
           if (typeof n.x !== 'number' || typeof n.y !== 'number') continue;
-          const nr = (n.academicRadius || 10) * (exportSettings?.nodeScale ?? 0.8) + 12;
+          const nr = (n.academicRadius || 10) * (exportSettings?.nodeScale ?? 0.8) + 14;
           if (Math.abs(n.x - candidateX) < (pillWidth / 2 + nr) && Math.abs(n.y - testY) < (pillHeight / 2 + nr)) {
             collides = true;
             break;
@@ -693,21 +700,26 @@ export function BlameNetwork({
 
       ctx.save();
       ctx.setLineDash([]);
+      if (isGroupActive) {
+        ctx.shadowColor = `rgba(${r}, ${g}, ${b}, 0.50)`;
+        ctx.shadowBlur = 10;
+      }
       ctx.beginPath();
       if (typeof ctx.roundRect === 'function') {
         ctx.roundRect(pillX, pillY, pillWidth, pillHeight, pillRadius);
       } else {
         ctx.rect(pillX, pillY, pillWidth, pillHeight);
       }
-      ctx.fillStyle = isGroupActive ? `rgba(${r}, ${g}, ${b}, 0.95)` : 'rgba(255, 255, 255, 0.94)';
+      ctx.fillStyle = isGroupActive ? `rgba(${r}, ${g}, ${b}, 0.95)` : 'rgba(255, 255, 255, 0.92)';
       ctx.fill();
-      ctx.strokeStyle = isGroupActive ? '#ffffff' : `rgba(${r}, ${g}, ${b}, 0.80)`;
-      ctx.lineWidth = isGroupActive ? 1.5 : 1.0;
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = isGroupActive ? '#ffffff' : `rgba(${r}, ${g}, ${b}, 0.60)`;
+      ctx.lineWidth = isGroupActive ? 1.5 : 0.8;
       ctx.stroke();
 
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillStyle = isGroupActive ? '#ffffff' : '#1e293b';
+      ctx.fillStyle = isGroupActive ? '#ffffff' : '#334155';
       ctx.fillText(badgeText, bestX, bestY);
       ctx.restore();
     });
@@ -723,12 +735,13 @@ export function BlameNetwork({
         const nodeScale = exportSettings?.nodeScale ?? 0.8;
         const textScale = exportSettings?.textScale ?? 1.0;
 
-        // 1. Scaled text-aware collision radius: node radius + label height & width + degree buffer
+        // 1. Scaled text-aware collision radius: node radius + dynamic text length buffer
         fgRef.current.d3Force('collide', forceCollide().radius(n => {
           const r = (n.academicRadius || 10) * nodeScale;
-          const collisionPadding = 34 * textScale;
-          return r + collisionPadding + Math.min(12, (n.degree || 1) * 2);
-        }).strength(1.0).iterations(10));
+          const nameLen = (n.name || '').length;
+          const textWidthBuffer = Math.min(48, nameLen * 3.6);
+          return (r + (24 + textWidthBuffer * 0.7) * textScale);
+        }).strength(1.0).iterations(12));
 
         // 2. Strong degree-weighted repulsion so hubs & dense clusters have ample breathing room
         const chargeForce = fgRef.current.d3Force('charge');
@@ -736,11 +749,11 @@ export function BlameNetwork({
           chargeForce.strength(n => {
             const deg = n.degree || 1;
             const r = (n.academicRadius || 10) * nodeScale;
-            return (-420 - 95 * Math.log2(1 + deg) - 12 * r) * spread;
+            return (-460 - 110 * Math.log2(1 + deg) - 15 * r) * spread;
           });
         }
 
-        // 3. Differential Link Force: intra-community (75px, 0.75), inter-community (140px, 0.35)
+        // 3. Differential Link Force: intra-community (70px, 0.75), inter-community (145px, 0.35)
         const linkForce = fgRef.current.d3Force('link');
         if (linkForce && typeof linkForce.distance === 'function') {
           linkForce
@@ -748,8 +761,7 @@ export function BlameNetwork({
               const sNode = typeof link.source === 'object' ? link.source : {};
               const tNode = typeof link.target === 'object' ? link.target : {};
               const isSameCommunity = sNode.communityId !== undefined && tNode.communityId !== undefined && sNode.communityId === tNode.communityId;
-              // Intra-community = 75px (cohesive cluster), Inter-community = 140px (clear gap between distinct clusters)
-              const baseDist = isSameCommunity ? 75 : 140;
+              const baseDist = isSameCommunity ? 70 : 145;
               const sR = (sNode.academicRadius || 10) * nodeScale;
               const tR = (tNode.academicRadius || 10) * nodeScale;
               const minRadiiDist = sR + tR + 28 * textScale;
@@ -768,8 +780,8 @@ export function BlameNetwork({
         fgRef.current.d3Force('clusterY', null);
 
         // Gentle global centering gravity to keep the whole graph centered in the viewport
-        fgRef.current.d3Force('x', forceX(0).strength(0.045));
-        fgRef.current.d3Force('y', forceY(0).strength(0.045));
+        fgRef.current.d3Force('x', forceX(0).strength(0.04));
+        fgRef.current.d3Force('y', forceY(0).strength(0.04));
 
         if (typeof fgRef.current.d3ReheatSimulation === 'function') {
           fgRef.current.d3ReheatSimulation();
@@ -952,13 +964,27 @@ export function BlameNetwork({
       const isEdgeInHoveredArticle = hoveredArticle && link.articleIds && link.articleIds.has(hoveredArticle);
       const isEdgeConnectedToHoveredNode = hoveredNode && (start.id === hoveredNode || end.id === hoveredNode);
       const isEdgeHovered = hoveredLink && link.id === hoveredLink;
+      const isEdgeActive = isEdgeInHoveredArticle || isEdgeConnectedToHoveredNode || isEdgeHovered;
 
       // Group dimming check
       const isGroupDimmed = activeGroupFilter !== null &&
         (!isNodeInGroup(start, legendGroupMode, activeGroupFilter) && !isNodeInGroup(end, legendGroupMode, activeGroupFilter));
 
       // Dimmed edges shouldn't show text if a specific group is focused, unless actively hovered
-      if (isGroupDimmed && !isEdgeInHoveredArticle && !isEdgeConnectedToHoveredNode && !isEdgeHovered) {
+      if (isGroupDimmed && !isEdgeActive) {
+        return;
+      }
+
+      // When a node or article is hovered, prioritize showing the edge labels of the active connections
+      if ((hoveredArticle || hoveredNode || hoveredLink) && !isEdgeActive) {
+        return;
+      }
+
+      // If the edge is short (dist < 55 * scale), do not draw text on edge to avoid stamping directly between adjacent nodes
+      if (dist < 55 * scale && !isEdgeActive) {
+        return;
+      }
+      if (dist < 36 * scale) {
         return;
       }
 
@@ -973,8 +999,8 @@ export function BlameNetwork({
       // Node radii at start & end to prevent text overlapping node circles
       const sRadius = (start.academicRadius || 10) * scale;
       const tRadius = (end.academicRadius || 10) * scale;
-      const safeStartDist = sRadius + 16 * textScale;
-      const safeEndDist = tRadius + 16 * textScale;
+      const safeStartDist = sRadius + 18 * textScale;
+      const safeEndDist = tRadius + 18 * textScale;
 
       // Compute safe range along Bezier curve
       const minSafeT = Math.min(0.44, safeStartDist / dist);
@@ -995,6 +1021,13 @@ export function BlameNetwork({
       let textX = oneMinusT * oneMinusT * start.x + 2 * oneMinusT * tParam * cX + tParam * tParam * end.x;
       let textY = oneMinusT * oneMinusT * start.y + 2 * oneMinusT * tParam * cY + tParam * tParam * end.y;
 
+      // Check distance between edge label and both source & target nodes
+      const distToSource = Math.hypot(textX - start.x, textY - start.y);
+      const distToTarget = Math.hypot(textX - end.x, textY - end.y);
+      if (!isEdgeActive && (distToSource < sRadius + 18 * textScale || distToTarget < tRadius + 18 * textScale)) {
+        return;
+      }
+
       // Evaluate exact Bezier curve tangent & normal vectors
       const tangentX = 2 * oneMinusT * (cX - start.x) + 2 * tParam * (end.x - cX);
       const tangentY = 2 * oneMinusT * (cY - start.y) + 2 * tParam * (end.y - cY);
@@ -1010,13 +1043,33 @@ export function BlameNetwork({
       }
 
       // Check collision with node labels or cluster badges
-      const collidesWithLabel = labelOccupiedRects.current.some(rect => {
-        return Math.hypot(rect.x - textX, rect.y - textY) < 22 * textScale;
+      const collisionThreshold = 24 * textScale;
+      let collidesWithLabel = labelOccupiedRects.current.some(rect => {
+        return Math.hypot(rect.x - textX, rect.y - textY) < collisionThreshold;
       });
+
+      // Also check against all nodes' label bounding boxes directly
+      if (!collidesWithLabel) {
+        for (const n of persistentNodes.current.values()) {
+          if (typeof n.x !== 'number' || typeof n.y !== 'number') continue;
+          const nr = (n.academicRadius || 10) * scale;
+          const nLabelY = n.y + nr + 10 * textScale;
+          if (Math.hypot(n.x - textX, nLabelY - textY) < collisionThreshold) {
+            collidesWithLabel = true;
+            break;
+          }
+        }
+      }
+
       if (collidesWithLabel) {
-        // Nudge slightly along normal vector to step out of collision
-        textX += normalX * (12 * textScale);
-        textY += normalY * (12 * textScale);
+        if (!isEdgeActive) {
+          // If any node label bounding box is within 24px of the edge label, skip drawing that edge label
+          return;
+        } else {
+          // Nudge slightly along normal vector to step out of collision
+          textX += normalX * (14 * textScale);
+          textY += normalY * (14 * textScale);
+        }
       }
 
       const relLabel = link.label.split(/[\s/]/)[0]; // Extract 'Opposes' from 'Opposes / Blames'

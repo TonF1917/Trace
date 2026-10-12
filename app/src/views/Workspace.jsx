@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useStore } from '../store';
-import { ArrowLeft, Plus, Bot, Loader2, Link as LinkIcon, Trash2, ArrowRight, BookOpen } from 'lucide-react';
+import { ArrowLeft, Plus, Bot, Loader2, Link as LinkIcon, Trash2, ArrowRight, BookOpen, Layers } from 'lucide-react';
 import { BlameNetwork, DEFAULT_RELATION_COLORS, normalizeRelation } from '../components/BlameNetwork';
 import { TimelineView } from '../components/TimelineView';
 import { MethodModal } from '../components/MethodModal';
@@ -28,6 +28,7 @@ export function Workspace() {
     source_name: a.source_name || 'Unknown Source',
     source_id: a.source_id || (a.source_name ? a.source_name.toLowerCase().replace(/\s+/g, '-') : 'unknown-source')
   }));
+  const processedArticles = React.useMemo(() => projectArticles.filter(a => a.isProcessed), [projectArticles]);
   
   const [activeView, setActiveView] = useState('topology');
   const [showFrequencies, setShowFrequencies] = useState(false);
@@ -56,6 +57,12 @@ export function Workspace() {
   const [selectedSource, setSelectedSourceState] = useState(() => new URLSearchParams(window.location.search).get('source'));
   const [selectedFrame, setSelectedFrameState] = useState(() => new URLSearchParams(window.location.search).get('frame'));
   const [selectedRelation, setSelectedRelationState] = useState(() => new URLSearchParams(window.location.search).get('relation'));
+
+  const filteredProcessedArticles = React.useMemo(() => processedArticles.filter(a =>
+    (!selectedSource || a.source_id === selectedSource) &&
+    (!selectedFrame || a.frames.includes(selectedFrame)) &&
+    (!selectedRelation || getMappedRelation(a.relation_type) === selectedRelation)
+  ), [processedArticles, selectedSource, selectedFrame, selectedRelation]);
   const [targetNodeCount, setTargetNodeCount] = useState(10);
   const [showSourceNodes, setShowSourceNodes] = useState(false);
   const [graphMode, setGraphMode] = useState('explore');
@@ -341,6 +348,20 @@ export function Workspace() {
       setProcessingId(null);
     }
   };
+
+  // Auto-analyze and unfold topology when entering a project with unprocessed articles
+  const autoAnalyzedRef = useRef(new Set());
+  useEffect(() => {
+    if (!project || isExporting) return;
+    const unprocessed = projectArticles.filter(a => !a.isProcessed);
+    if (projectArticles.length > 0 && processedArticles.length === 0 && unprocessed.length > 0 && !processingId) {
+      const target = unprocessed[0];
+      if (!autoAnalyzedRef.current.has(target.id)) {
+        autoAnalyzedRef.current.add(target.id);
+        handleProcessLLM(target);
+      }
+    }
+  }, [projectId, projectArticles.length, processedArticles.length, processingId]);
 
   const handleExtractMoreAll = async () => {
     const processedSources = Array.from(new Set(projectArticles.filter(a => a.isProcessed && a.lede).map(a => a.lede)));
@@ -648,13 +669,6 @@ export function Workspace() {
       }
     }, 800); // 800ms delay to ensure force graph canvas is redrawn and zoomed
   };
-
-  const processedArticles = React.useMemo(() => projectArticles.filter(a => a.isProcessed), [projectArticles]);
-  const filteredProcessedArticles = React.useMemo(() => processedArticles.filter(a => 
-    (!selectedSource || a.source_id === selectedSource) && 
-    (!selectedFrame || a.frames.includes(selectedFrame)) &&
-    (!selectedRelation || getMappedRelation(a.relation_type) === selectedRelation)
-  ), [processedArticles, selectedSource, selectedFrame, selectedRelation]);
 
   const handleLinkSelected = React.useCallback((articleIds) => {
     if (!articleIds || articleIds.size === 0) return;
@@ -1082,11 +1096,67 @@ export function Workspace() {
 
         <div className="flex-1 min-h-0 relative bg-slate-50 flex flex-col overflow-hidden">
           {processedArticles.length === 0 ? (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="text-center">
-                <Bot className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-                <h3 className="text-lg font-bold text-slate-700">{t('Canvas Empty')}</h3>
-                <p className="text-sm text-slate-500 mt-1 max-w-sm">{t('Add articles on the left and run the LLM Analysis pipeline to generate the topology network.')}</p>
+            <div className="absolute inset-0 flex items-center justify-center p-6">
+              <div className="text-center max-w-md bg-white p-8 rounded-2xl shadow-sm border border-slate-200">
+                {processingId ? (
+                  <div className="space-y-4">
+                    <div className="relative w-14 h-14 mx-auto flex items-center justify-center">
+                      <Sparkles className="w-10 h-10 text-rose-500 animate-spin" />
+                    </div>
+                    <h3 className="text-lg font-black text-slate-800">{t('Extracting Narrative Topology...')}</h3>
+                    <p className="text-xs text-slate-500 leading-relaxed">
+                      {t('AI is extracting stakeholders, attribution chains, and narrative frames via Gemini 3.8 Flash High... Topology will unfold automatically.')}
+                    </p>
+                    <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                      <div className="bg-rose-500 h-full w-2/3 animate-pulse rounded-full" />
+                    </div>
+                  </div>
+                ) : projectArticles.some(a => !a.isProcessed) ? (
+                  <div className="space-y-4">
+                    <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-full flex items-center justify-center mx-auto">
+                      <Layers className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-black text-slate-800">{t('Corpus Ingested & Ready')}</h3>
+                      <p className="text-xs text-slate-500 mt-1">
+                        {t('Found unprocessed literature. Start the AI extraction pipeline to unfold the network.')}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => handleDeepExtractAll()}
+                      className="inline-flex items-center gap-2 px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl shadow-sm transition-all active:scale-95 cursor-pointer"
+                    >
+                      <Sparkles className="w-4 h-4" />
+                      {t('Start Auto-Analysis & Unfold Topology')}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <Bot className="w-12 h-12 text-slate-300 mx-auto" />
+                    <div>
+                      <h3 className="text-lg font-black text-slate-700">{t('Canvas Empty')}</h3>
+                      <p className="text-xs text-slate-500 mt-1">
+                        {t('Add articles on the left or use AI Research to generate your topic topology.')}
+                      </p>
+                    </div>
+                    <div className="flex items-center justify-center gap-3 pt-2">
+                      <button
+                        onClick={() => { setShowAddForm(true); setShowResearchForm(false); }}
+                        className="flex items-center gap-1.5 px-3.5 py-2 bg-rose-50 text-rose-700 border border-rose-200 text-xs font-bold rounded-lg hover:bg-rose-100 transition-colors"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        {t('Add Text')}
+                      </button>
+                      <button
+                        onClick={() => { setShowResearchForm(true); setShowAddForm(false); }}
+                        className="flex items-center gap-1.5 px-3.5 py-2 bg-purple-50 text-purple-700 border border-purple-200 text-xs font-bold rounded-lg hover:bg-purple-100 transition-colors"
+                      >
+                        <Search className="w-3.5 h-3.5" />
+                        {t('Auto-Research')}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           ) : (

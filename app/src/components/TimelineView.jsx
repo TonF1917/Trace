@@ -21,7 +21,7 @@ export function TimelineView({ articles, sources, hoveredArticle }) {
   }
 
   return (
-    <div className="absolute inset-0 bg-slate-50 overflow-y-auto p-8 border border-slate-200 rounded-xl shadow-inner">
+    <div className="flex-1 min-h-0 h-full overflow-y-auto bg-slate-50 p-8 border border-slate-200 rounded-xl shadow-inner">
       <div className="max-w-3xl mx-auto relative">
         {/* Vertical Line */}
         <div className="absolute left-[27px] top-4 bottom-4 w-px bg-slate-300"></div>

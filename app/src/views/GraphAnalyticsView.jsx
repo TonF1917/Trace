@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getGraphGlobalMetrics } from '../utils/graphAnalytics';
 import { generateTopologyReport, generateLiteratureSynthesisMatrix } from '../services/LLMService';
+import { deriveFactionName } from '../components/BlameNetwork';
 import {
   Network,
   Share2,
@@ -101,6 +102,22 @@ export function GraphAnalyticsView({ project, articles }) {
     return getGraphGlobalMetrics(nodes, links);
   }, [nodes, links]);
 
+  // Map communityId -> substantive faction name
+  const factionMap = useMemo(() => {
+    const groups = new Map();
+    (metrics.nodeMetrics || []).forEach(node => {
+      const commId = node.communityId ?? 0;
+      if (!groups.has(commId)) groups.set(commId, []);
+      groups.get(commId).push(node);
+    });
+    const nameMap = new Map();
+    groups.forEach((memberNodes, commId) => {
+      const sorted = [...memberNodes].sort((a, b) => (b.degree || 0) - (a.degree || 0));
+      nameMap.set(commId, deriveFactionName(sorted, commId));
+    });
+    return nameMap;
+  }, [metrics.nodeMetrics]);
+
   // Filtered & Sorted Node Metrics
   const filteredMetrics = useMemo(() => {
     let list = metrics.nodeMetrics || [];
@@ -185,7 +202,7 @@ export function GraphAnalyticsView({ project, articles }) {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto bg-slate-50 p-4 sm:p-6 lg:p-8 text-slate-800 space-y-6 sm:space-y-8 font-sans">
+    <div className="flex-1 min-h-0 h-full overflow-y-auto bg-slate-50 p-4 sm:p-6 lg:p-8 pb-16 text-slate-800 space-y-6 sm:space-y-8 font-sans">
       {/* Header Banner */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 pb-5">
         <div>
@@ -469,7 +486,7 @@ export function GraphAnalyticsView({ project, articles }) {
                         className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-sans font-bold"
                         style={{ backgroundColor: row.communityColor + '1a', color: row.communityColor, border: `1px solid ${row.communityColor}44` }}
                       >
-                        Community {row.communityId + 1}
+                        {factionMap.get(row.communityId) || `Faction ${row.communityId + 1}`}
                       </span>
                     </td>
                   </tr>

@@ -1065,7 +1065,7 @@ export function Workspace() {
           </div>
         </header>
 
-        <div className="flex-1 relative bg-slate-50 flex flex-col">
+        <div className="flex-1 min-h-0 relative bg-slate-50 flex flex-col overflow-hidden">
           {processedArticles.length === 0 ? (
             <div className="absolute inset-0 flex items-center justify-center">
               <div className="text-center">
@@ -1075,7 +1075,7 @@ export function Workspace() {
               </div>
             </div>
           ) : (
-            <div className="flex-1 relative">
+            <div className="flex-1 min-h-0 h-full relative flex flex-col overflow-hidden">
               {activeView === 'topology' ? (
                 <>
                 <BlameNetwork

@@ -1,6 +1,7 @@
 #!/bin/bash
 DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$DIR"
+export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 
 echo "==================================================="
 echo "    Trace - Academic Narrative Analysis Tool"

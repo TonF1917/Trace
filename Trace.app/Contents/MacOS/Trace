@@ -9,6 +9,13 @@ APP_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 
 cd "$APP_ROOT"
 
+# Apps launched from Finder do not inherit the shell PATH (Homebrew / nvm / nodejs.org installer)
+export PATH="/opt/homebrew/bin:/usr/local/bin:$HOME/.volta/bin:$PATH"
+[ -s "$HOME/.nvm/nvm.sh" ] && . "$HOME/.nvm/nvm.sh"
+
+# Clear the download quarantine flag so macOS does not block the bundled scripts
+xattr -dr com.apple.quarantine "$APP_ROOT" 2>/dev/null
+
 # Check Node.js runtime
 if ! command -v node &> /dev/null; then
     osascript -e 'display alert "Node.js Not Found" message "Trace requires Node.js to run. Please install Node.js from https://nodejs.org or via Homebrew (brew install node)." as critical'

@@ -55,7 +55,7 @@
   - **Manual**: Drag nodes to pin them at exact coordinates (`fx`, `fy`) for custom layout arrangement; click a pinned node to release it back to the physics simulation.
   - **Figure**: Clean publication inspection mode that suppresses interactive hover popups for distraction-free figure composition.
 - **Dynamic Grouping Modes (`GROUPING`)**:
-  - **Factions**: Groups actors with community detection (a simplified, single-level Louvain-based pass; opposing and blaming edges are left out of the grouping so that antagonists are not merged). Each group is drawn inside a dashed convex hull and labeled `Faction · Dominant Frame (Count)`. Group names are taken from the group's most connected members; the demo project also uses a preset list of NEP-era names.
+  - **Factions**: Groups actors with community detection (a simplified, single-level Louvain-based pass; opposing, blaming, and inciting edges are left out of the grouping so that antagonists are not merged). Each group is drawn inside a dashed convex hull and labeled `Faction · Dominant Frame (Count)`. Group names are taken from the group's most connected members; the demo project also uses a preset list of NEP-era names.
   - **Centrality**: Colors nodes by structural network role (`Core Hubs`, `Bridge Actors`, `Periphery`).
   - **Stance**: Colors nodes by directional attribution role (`Primary Accusers / Initiators`, `Primary Blame Targets`, `Balanced / Neutral`).
   - **Uniform**: Clean monochrome academic slate styling.
@@ -166,7 +166,7 @@
   - **手动排版（Manual）**：自由拖拽节点并将其锚定在画布指定坐标，再次点击已锚定节点即可解除锁定。
   - **出图（Figure）**：纯净学术出图预览模式，屏蔽悬停干扰弹窗，便于论文插图排版。
 - **四种动态分组视图（`分组视图 / GROUPING`）**：
-  - **阵营派系（Factions）**：用社团发现自动分组（基于 Louvain 的简化单层实现；“反对/指责”类关系不参与分组，以免把对立双方并入同一派系），绘制派系虚线凸包，顶部生成 `派系名称 · 主导框架 (成员数)` 标签。派系名称取自组内连接最多的成员；演示项目另有一组针对新经济政策时期的预设名称。
+  - **阵营派系（Factions）**：用社团发现自动分组（基于 Louvain 的简化单层实现；“反对/指责”与“煽动/动员”类关系不参与分组，以免把对立双方并入同一派系），绘制派系虚线凸包，顶部生成 `派系名称 · 主导框架 (成员数)` 标签。派系名称取自组内连接最多的成员；演示项目另有一组针对新经济政策时期的预设名称。
   - **中心层级（Centrality）**：按节点在网络中的结构性地位（核心枢纽 Hubs、跨派系桥梁 Bridges、外围节点 Periphery）着色。
   - **归责立场（Stance）**：按归因方向（主要发起指责方、主要被归责焦点、中立平衡节点）着色。
   - **单色（Uniform）**：简约学术灰蓝单色模式。

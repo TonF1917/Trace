@@ -11,7 +11,7 @@ import { GraphAnalyticsView } from './GraphAnalyticsView';
 import { analyzeArticle, extractMoreRelationships, generateTextForTopic, connectExistingEntities, consolidateEntities } from '../services/LLMService';
 import Papa from 'papaparse';
 import { toPng, toJpeg } from 'html-to-image';
-import { parseFile } from '../utils/fileParser';
+import { parseFilesBatch } from '../utils/fileParser';
 import { Paperclip, Search, Sparkles, Network } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { useTranslation } from 'react-i18next';
@@ -52,6 +52,9 @@ export function Workspace() {
   
   const fileInputRef = useRef(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(null); // e.g. "2/7 name.pdf"
+  const [uploadErrors, setUploadErrors] = useState([]); // [{name, message}]
+  const [roundProgress, setRoundProgress] = useState(null); // e.g. "round 3 / 8"
   const [isDragging, setIsDragging] = useState(false);
 
   const [selectedSource, setSelectedSourceState] = useState(() => new URLSearchParams(window.location.search).get('source'));
@@ -142,24 +145,27 @@ export function Workspace() {
 
   const [processingId, setProcessingId] = useState(null);
 
-  const processFile = async (file) => {
+  // Parse a batch of files: per-file errors are collected and shown together afterwards.
+  const processFiles = async (files) => {
+    const list = files.filter(Boolean);
+    if (list.length === 0) return;
     setIsUploading(true);
+    setUploadErrors([]);
     try {
-      const text = await parseFile(file);
-      setNewArticle(prev => ({ ...prev, lede: prev.lede ? prev.lede + '\n\n' + text : text }));
+      const { text, errors } = await parseFilesBatch(list, { onProgress: setUploadProgress });
+      if (text) setNewArticle(prev => ({ ...prev, lede: prev.lede ? prev.lede + '\n\n' + text : text }));
+      setUploadErrors(errors);
     } catch (err) {
-      alert(`Failed to parse file: ${err.message}`);
+      setUploadErrors([{ name: '(batch)', message: err.message }]);
     } finally {
       setIsUploading(false);
+      setUploadProgress(null);
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
   const handleFileUpload = async (e) => {
-    const files = Array.from(e.target.files || []);
-    for (const file of files) {
-      if (file) await processFile(file);
-    }
+    await processFiles(Array.from(e.target.files || []));
   };
 
   const handleDragOver = (e) => {
@@ -176,10 +182,7 @@ export function Workspace() {
     e.preventDefault();
     setIsDragging(false);
     if (isUploading) return;
-    const files = Array.from(e.dataTransfer.files || []);
-    for (const file of files) {
-      if (file) await processFile(file);
-    }
+    await processFiles(Array.from(e.dataTransfer.files || []));
   };
 
   // Derive sources from articles dynamically and memoize to prevent graph explosion on hover
@@ -263,6 +266,17 @@ export function Workspace() {
     }
   };
 
+  const reportRound = (current, total, info) => {
+    setRoundProgress(`round ${current} / ${total}${info?.phase === 'retry' ? ' (retry)' : ''}`);
+  };
+
+  const warnFailedRounds = (result) => {
+    if (result?.failedRounds?.length) {
+      alert(`Warning: ${result.failedRounds.length}/${result.totalRounds} extraction round(s) failed after one retry and are NOT included in the results:\n` +
+        result.failedRounds.map(f => `- round ${f.round}: ${f.error}`).join('\n'));
+    }
+  };
+
   const handleProcessLLM = async (article) => {
     setProcessingId(article.id);
     try {
@@ -273,7 +287,8 @@ export function Workspace() {
       
       const customRels = project.relations || ['Opposes / Blames'];
       const effectiveCount = targetNodeCount === '' ? 10 : Number(targetNodeCount);
-      const result = await analyzeArticle(safeText, project.frames, project.tones, customRels, effectiveCount);
+      const result = await analyzeArticle(safeText, project.frames, project.tones, customRels, effectiveCount, reportRound);
+      warnFailedRounds(result);
       
       if (result.relationships && result.relationships.length > 0) {
         const first = result.relationships[0];
@@ -350,6 +365,7 @@ export function Workspace() {
       alert(`Processing failed: ${err.message}`);
     } finally {
       setProcessingId(null);
+      setRoundProgress(null);
     }
   };
 
@@ -391,7 +407,8 @@ export function Workspace() {
         
         const customRels = project.relations || ['Opposes / Blames'];
         const effectiveCount = targetNodeCount === '' ? 10 : Number(targetNodeCount);
-        const result = await extractMoreRelationships(safeText, project.frames, project.tones, customRels, existingRelationshipsContext, effectiveCount);
+        const result = await extractMoreRelationships(safeText, project.frames, project.tones, customRels, existingRelationshipsContext, effectiveCount, reportRound);
+        warnFailedRounds(result);
         
         if (result.relationships && result.relationships.length > 0) {
           extractedCount += result.relationships.length;
@@ -439,6 +456,7 @@ export function Workspace() {
       alert(`Deep extraction failed: ${err.message}`);
     } finally {
       setProcessingId(null);
+      setRoundProgress(null);
     }
   };
 
@@ -471,7 +489,7 @@ export function Workspace() {
       const rawText = processedSources[i];
       if (rawText && rawText.trim().length > 50) {
         try {
-          const safeText = rawText.slice(0, 15000);
+          const safeText = rawText;
           const customRels = project.relations || ['Opposes / Blames'];
           const effectiveCount = targetNodeCount === '' ? 10 : Number(targetNodeCount);
           
@@ -486,8 +504,10 @@ export function Workspace() {
             customRels, 
             uniqueEntitiesList, 
             existingContext,
-            effectiveCount
+            effectiveCount,
+            reportRound
           );
+          warnFailedRounds(result);
           
           if (result.relationships && result.relationships.length > 0) {
             const newRels = result.relationships.filter(r => !existingRelationshipsStr.has(`${r.main_actor}|${r.blame_target}|${r.relation_type}`));
@@ -527,6 +547,7 @@ export function Workspace() {
     }
     
     setProcessingId(null);
+    setRoundProgress(null);
     if (extractedCount > 0) {
       alert(`Connected relationships: ${extractedCount} new relations found!`);
     } else {
@@ -746,7 +767,7 @@ export function Workspace() {
                 title="Deep extract missing relationships from all processed source texts"
               >
                 {processingId === 'extract_more_all' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-                {t('Deep Extract All')}
+                {t('Deep Extract All')}{processingId === 'extract_more_all' && roundProgress ? ` (${roundProgress})` : ''}
               </button>
               <button 
                 onClick={handleConnectExistingAll}
@@ -755,7 +776,7 @@ export function Workspace() {
                 title="Connect existing nodes by finding new relations between them"
               >
                 {processingId === 'connect_existing_all' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Network className="w-3 h-3" />}
-                {t('Connect Existing')}
+                {t('Connect Existing')}{processingId === 'connect_existing_all' && roundProgress ? ` (${roundProgress})` : ''}
               </button>
               <button 
                 onClick={handleConsolidateEntities}
@@ -900,7 +921,6 @@ export function Workspace() {
                   className={`w-full text-sm border ${isDragging ? 'border-rose-500 bg-rose-50' : 'border-slate-200'} rounded p-2 h-24 transition-all`} 
                   required 
                   disabled={isUploading}
-                  maxLength={400000} 
                 />
                 
                 <div className="absolute bottom-2 right-2 flex gap-2 items-center">
@@ -910,10 +930,19 @@ export function Workspace() {
                   <input type="file" ref={fileInputRef} className="hidden" accept="*" multiple onChange={handleFileUpload} />
                   <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isUploading} className="flex items-center gap-1 px-2 py-1 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 text-[10px] font-bold rounded shadow-sm transition-colors" title={t("Import from File (PDF, DOCX, TXT...)")}>
                     {isUploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Paperclip className="w-3 h-3" />}
-                    {isUploading ? t('Parsing...') : t('Import')}
+                    {isUploading ? (t('Parsing...') + (uploadProgress ? ` ${uploadProgress}` : '')) : t('Import')}
                   </button>
                 </div>
               </div>
+
+              {uploadErrors.length > 0 && (
+                <div className="mb-3 p-2 bg-amber-50 text-amber-800 border border-amber-200 rounded text-xs">
+                  <p className="font-bold mb-1">{uploadErrors.length} file(s) could not be imported (other files were kept):</p>
+                  <ul className="list-disc pl-4 space-y-0.5 break-words">
+                    {uploadErrors.map((e, i) => <li key={i}><span className="font-mono">{e.name}</span>: {e.message}</li>)}
+                  </ul>
+                </div>
+              )}
 
               <div className="flex justify-end gap-2">
                 <button type="button" onClick={() => setShowAddForm(false)} className="px-3 py-1 text-xs font-bold text-slate-500">{t('Cancel')}</button>
@@ -1107,7 +1136,7 @@ export function Workspace() {
                     <div className="relative w-14 h-14 mx-auto flex items-center justify-center">
                       <Sparkles className="w-10 h-10 text-rose-500 animate-spin" />
                     </div>
-                    <h3 className="text-lg font-black text-slate-800">{t('Extracting Narrative Topology...')}</h3>
+                    <h3 className="text-lg font-black text-slate-800">{t('Extracting Narrative Topology...')}{roundProgress ? ` (${roundProgress})` : ''}</h3>
                     <p className="text-xs text-slate-500 leading-relaxed">
                       {t('AI is extracting stakeholders, attribution chains, and narrative frames via Gemini 3.8 Flash High... Topology will unfold automatically.')}
                     </p>

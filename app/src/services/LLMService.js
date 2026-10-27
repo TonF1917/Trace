@@ -39,6 +39,154 @@ export function cleanAndParseJson(text) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Chunked multi-round processing
+// ---------------------------------------------------------------------------
+export const CHUNK_SIZE = 14000;
+export const CHUNK_OVERLAP = 400;
+
+/**
+ * Split text into chunks of ~chunkSize chars on paragraph boundaries. Each chunk after
+ * the first starts with a small overlap (tail of the previous chunk) for continuity.
+ * Over-long paragraphs are split on sentence/whitespace boundaries.
+ */
+export function splitIntoChunks(text, { chunkSize = CHUNK_SIZE, overlap = CHUNK_OVERLAP } = {}) {
+  const src = typeof text === 'string' ? text : '';
+  if (src.length <= chunkSize) return src.trim() ? [src] : [];
+
+  // 1. paragraph units, each no longer than chunkSize
+  const units = [];
+  for (const para of src.split(/\n\s*\n/)) {
+    if (!para.trim()) continue;
+    let rest = para;
+    while (rest.length > chunkSize) {
+      const window = rest.slice(0, chunkSize);
+      const m = Math.max(window.lastIndexOf('。'), window.lastIndexOf('. '), window.lastIndexOf('! '), window.lastIndexOf('? '), window.lastIndexOf('\n'));
+      let cut;
+      if (m > chunkSize * 0.5) {
+        cut = m + 1;
+      } else {
+        const ws = window.lastIndexOf(' ');
+        cut = ws > chunkSize * 0.5 ? ws + 1 : chunkSize;
+      }
+      units.push(rest.slice(0, cut));
+      rest = rest.slice(cut);
+    }
+    if (rest.trim()) units.push(rest);
+  }
+
+  // 2. greedy packing
+  const raw = [];
+  let cur = '';
+  for (const u of units) {
+    const joined = cur ? `${cur}\n\n${u}` : u;
+    if (cur && joined.length > chunkSize) {
+      raw.push(cur);
+      cur = u;
+    } else {
+      cur = joined;
+    }
+  }
+  if (cur) raw.push(cur);
+
+  // 3. overlap: prefix the tail of the previous chunk, starting at a word/line boundary
+  return raw.map((chunk, i) => {
+    if (i === 0 || overlap <= 0) return chunk;
+    let tail = raw[i - 1].slice(-overlap);
+    const nl = tail.indexOf('\n');
+    const sp = tail.indexOf(' ');
+    const start = nl >= 0 && nl < overlap * 0.5 ? nl + 1 : (sp >= 0 && sp < overlap * 0.5 ? sp + 1 : 0);
+    tail = tail.slice(start).trim();
+    return tail ? `${tail}\n\n${chunk}` : chunk;
+  });
+}
+
+export class ChunkedRoundsError extends Error {
+  constructor(message, failedRounds, totalRounds) {
+    super(message);
+    this.name = 'ChunkedRoundsError';
+    this.failedRounds = failedRounds;
+    this.totalRounds = totalRounds;
+  }
+}
+
+export const describeFailedRounds = (failedRounds, total) =>
+  failedRounds.map(f => `round ${f.round}/${total}: ${f.error}`).join('; ');
+
+/**
+ * Run `roundFn(chunk, index, chunks)` sequentially over the chunks of `text`.
+ * Each failing round is retried once; rounds that still fail are reported in
+ * `failedRounds` (never silently dropped).
+ * onProgress(current, total, info) fires before every round (and before a retry).
+ * @returns {{ results: any[], failedRounds: {round:number, error:string}[], total: number }}
+ */
+export async function runChunkedRounds(text, roundFn, { onProgress, chunkSize, overlap, retries = 1 } = {}) {
+  const chunks = splitIntoChunks(text, { chunkSize, overlap });
+  const list = chunks.length ? chunks : [text || ''];
+  const total = list.length;
+  const results = [];
+  const failedRounds = [];
+  for (let i = 0; i < total; i++) {
+    if (onProgress) onProgress(i + 1, total, { phase: 'round' });
+    let lastErr = null;
+    let ok = false;
+    for (let attempt = 0; attempt <= retries && !ok; attempt++) {
+      try {
+        results.push(await roundFn(list[i], i, list));
+        ok = true;
+      } catch (err) {
+        lastErr = err;
+        if (attempt < retries && onProgress) onProgress(i + 1, total, { phase: 'retry' });
+      }
+    }
+    if (!ok) failedRounds.push({ round: i + 1, error: lastErr?.message || String(lastErr) });
+  }
+  return { results, failedRounds, total };
+}
+
+const normKey = (s) => String(s ?? '').toLowerCase().replace(/\s+/g, ' ').trim();
+
+function dedupeStrings(arr, limit = Infinity) {
+  const seen = new Set();
+  const out = [];
+  for (const v of arr) {
+    const s = typeof v === 'string' ? v.trim() : '';
+    const k = normKey(s);
+    if (!s || seen.has(k)) continue;
+    seen.add(k);
+    out.push(s);
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+export function relationshipKey(r) {
+  return `${normKey(r.main_actor ?? r.actor)}|${normKey(r.blame_target ?? r.target)}|${normKey(r.relation_type)}`;
+}
+
+/** Merge relationship arrays from several rounds, dropping duplicates (same actor/target/relation). */
+export function mergeRelationships(lists) {
+  const seen = new Set();
+  const out = [];
+  for (const list of lists) {
+    for (const r of Array.isArray(list) ? list : []) {
+      if (!r || typeof r !== 'object') continue;
+      const k = relationshipKey(r);
+      if (seen.has(k)) continue;
+      seen.add(k);
+      out.push(r);
+    }
+  }
+  return out;
+}
+
+/** Throw when no round succeeded; otherwise callers receive failedRounds to surface. */
+function requireSomeSuccess({ results, failedRounds, total }) {
+  if (results.length === 0 && failedRounds.length > 0) {
+    throw new ChunkedRoundsError(`All ${total} round(s) failed. ${describeFailedRounds(failedRounds, total)}`, failedRounds, total);
+  }
+}
+
 async function callLLM(systemPrompt, userPrompt, temperature = 0.1, expectJson = true) {
   const { apiConfig } = useStore.getState();
   const provider = apiConfig.provider || 'trace-pool';
@@ -262,7 +410,7 @@ async function callLLM(systemPrompt, userPrompt, temperature = 0.1, expectJson =
   }
 }
 
-export async function analyzeArticle(articleText, customFrames, customTones, customRelations, targetNodeCount = 10) {
+export async function analyzeArticle(articleText, customFrames, customTones, customRelations, targetNodeCount = 10, onProgress) {
   const systemPrompt = `You are an expert academic research assistant specializing in framing analysis and political communication.
 Your task is to analyze the provided news text and extract its narrative structure based strictly on the provided custom ontology.
 
@@ -294,12 +442,20 @@ CRITICAL RULES:
 4. If you extract specific factions or individuals (e.g. Trotsky, Left Opposition), you MUST also extract a "Belongs To" relationship linking them to their overarching group (e.g. Bolsheviks).
 5. Ensure 'date' is specific to the relationship.`;
 
-  const userPrompt = `Analyze the following text:\n\n${articleText}`;
-  return callLLM(systemPrompt, userPrompt);
+  const run = await runChunkedRounds(articleText, (chunk) =>
+    callLLM(systemPrompt, `Analyze the following text:\n\n${chunk}`), { onProgress });
+  requireSomeSuccess(run);
+  if (run.total === 1) return run.results[0];
+  return {
+    keywords: dedupeStrings(run.results.flatMap(r => r?.keywords || []), 8),
+    relationships: mergeRelationships(run.results.map(r => r?.relationships)),
+    failedRounds: run.failedRounds,
+    totalRounds: run.total
+  };
 }
 
-export async function extractMoreRelationships(articleText, customFrames, customTones, customRelations, existingRelationships, targetNodeCount = 10) {
-  const systemPrompt = `You are an expert academic research assistant specializing in framing analysis and political communication.
+export async function extractMoreRelationships(articleText, customFrames, customTones, customRelations, existingRelationships, targetNodeCount = 10, onProgress) {
+  const buildSystemPrompt = (known) => `You are an expert academic research assistant specializing in framing analysis and political communication.
 Your task is to re-read the provided news text and perform a DEEP EXTRACTION of micro-narratives, class conflicts, and entity interactions based strictly on the provided custom ontology.
 
 CUSTOM FRAMES: ${customFrames.join(', ')}
@@ -308,7 +464,7 @@ CUSTOM RELATION TYPES: ${customRelations.join(', ')}
 
 IMPORTANT CONTEXT:
 The user has ALREADY extracted the following relationships from this text:
-${existingRelationships.map((r, i) => `[${i+1}] Actor: ${r.actor} | Target: ${r.target} | Relation: ${r.relation_type || 'Unknown'} | Quote: "${r.quote}"`).join('\n')}
+${known.map((r, i) => `[${i+1}] Actor: ${r.actor} | Target: ${r.target} | Relation: ${r.relation_type || 'Unknown'} | Quote: "${r.quote}"`).join('\n')}
 
 YOUR MISSION:
 Find ANY OTHER relationships (Actor interacting with Target) that are NOT in the list above. Look for deeper, less obvious, or secondary factional conflicts, financial ties, or political alliances.
@@ -335,12 +491,26 @@ CRITICAL RULES:
 3. Ensure 'date' is specific to the relationship.
 4. If absolutely no new relationships can be found, return {"relationships": []}.`;
 
-  const userPrompt = `Please deep-extract new relationships from the following text:\n\n${articleText}`;
-  return callLLM(systemPrompt, userPrompt);
+  // Rounds run sequentially; relationships found in earlier rounds are fed to later ones
+  // so the model does not re-extract them.
+  const known = [...existingRelationships];
+  const found = [];
+  const run = await runChunkedRounds(articleText, async (chunk) => {
+    const res = await callLLM(buildSystemPrompt(known), `Please deep-extract new relationships from the following text:\n\n${chunk}`);
+    for (const r of (res?.relationships || [])) {
+      known.push({ actor: r.main_actor, target: r.blame_target, relation_type: r.relation_type, quote: r.quote });
+    }
+    found.push(res?.relationships);
+    return res;
+  }, { onProgress });
+  requireSomeSuccess(run);
+  const existingKeys = new Set(existingRelationships.map(relationshipKey));
+  const relationships = mergeRelationships(found).filter(r => !existingKeys.has(relationshipKey(r)));
+  return { relationships, failedRounds: run.failedRounds, totalRounds: run.total };
 }
 
-export async function connectExistingEntities(articleText, customFrames, customTones, customRelations, existingEntities, existingRelationshipsContext, targetNodeCount = 10) {
-  const systemPrompt = `You are an expert academic research assistant specializing in framing analysis and political communication.
+export async function connectExistingEntities(articleText, customFrames, customTones, customRelations, existingEntities, existingRelationshipsContext, targetNodeCount = 10, onProgress) {
+  const buildSystemPrompt = (knownContext) => `You are an expert academic research assistant specializing in framing analysis and political communication.
 Your task is to re-read the provided news text and extract entity interactions based strictly on the provided custom ontology.
 
 CUSTOM FRAMES: ${customFrames.join(', ')}
@@ -352,7 +522,7 @@ The user is ONLY interested in relationships between the following EXISTING enti
 ${existingEntities.join(', ')}
 
 You have ALREADY extracted these relationships:
-${existingRelationshipsContext}
+${knownContext}
 
 YOUR MISSION:
 Find any NEW relationships (Actor interacting with Target) where BOTH the Actor and the Target are from the EXISTING entities list provided above.
@@ -383,8 +553,19 @@ CRITICAL RULES:
 4. Ensure 'date' is specific to the relationship.
 5. If no relationships can be found between the listed entities, return {"relationships": []}.`;
 
-  const userPrompt = `Please extract relationships ONLY between the specified existing entities from the following text:\n\n${articleText}`;
-  return callLLM(systemPrompt, userPrompt, 0.5, true);
+  let knownContext = existingRelationshipsContext;
+  const found = [];
+  const run = await runChunkedRounds(articleText, async (chunk) => {
+    const res = await callLLM(buildSystemPrompt(knownContext), `Please extract relationships ONLY between the specified existing entities from the following text:\n\n${chunk}`, 0.5, true);
+    const rels = res?.relationships || [];
+    if (rels.length) {
+      knownContext += '\n' + rels.map(r => `Actor: ${r.main_actor} | Target: ${r.blame_target} | Relation: ${r.relation_type}`).join('\n');
+    }
+    found.push(rels);
+    return res;
+  }, { onProgress });
+  requireSomeSuccess(run);
+  return { relationships: mergeRelationships(found), failedRounds: run.failedRounds, totalRounds: run.total };
 }
 
 export async function consolidateEntities(entitiesList) {
@@ -434,7 +615,7 @@ Return ONLY a valid JSON object with the following structure:
   return callLLM(systemPrompt, userPrompt, 0.5, true); // true for expectJson
 }
 
-export async function generateProjectOntology(sourceText) {
+export async function generateProjectOntology(sourceText, onProgress) {
   const systemPrompt = `You are an expert in media studies, journalism, and political communication. 
 The user will provide a text (e.g., a news article, a Wikipedia summary, or an event description).
 Your task is to analyze the text and automatically design a framing analysis project for it.
@@ -447,47 +628,68 @@ Return ONLY a valid JSON object with the following structure (do not include mar
   "tones": ["3-5 emotional tones relevant to how media might report this (e.g. Alarmist, Neutral, Patriotic, Critical)"]
 }`;
 
-  const userPrompt = `Please design an ontology for the following event based on this text:\n\n${sourceText}`;
-  return callLLM(systemPrompt, userPrompt);
+  const run = await runChunkedRounds(sourceText, (chunk) =>
+    callLLM(systemPrompt, `Please design an ontology for the following event based on this text:\n\n${chunk}`), { onProgress });
+  requireSomeSuccess(run);
+  if (run.total === 1) return run.results[0];
+
+  // Merge the per-chunk ontologies (dedupe frames/tones), then let the model reconcile
+  // them into one coherent ontology. If that final pass fails, fall back to the heuristic merge.
+  const frames = dedupeStrings(run.results.flatMap(r => Array.isArray(r?.frames) ? r.frames : []));
+  const tones = dedupeStrings(run.results.flatMap(r => Array.isArray(r?.tones) ? r.tones : []));
+  const names = dedupeStrings(run.results.map(r => r?.name));
+  const descriptions = dedupeStrings(run.results.map(r => r?.description));
+  const merged = {
+    name: names[0] || '',
+    description: descriptions[0] || '',
+    frames: frames.slice(0, 8),
+    tones: tones.slice(0, 6),
+    failedRounds: run.failedRounds,
+    totalRounds: run.total
+  };
+  try {
+    if (onProgress) onProgress(run.total, run.total, { phase: 'synthesize' });
+    const reduced = await callLLM(systemPrompt,
+      `The source text was analyzed in ${run.total} parts. Here are the partial ontologies (JSON). Reconcile them into ONE final ontology for the whole text, using the same JSON structure (4-6 frames, 3-5 tones, one name, 1-2 sentence description):\n\n${JSON.stringify({ names, descriptions, frames, tones })}`);
+    if (reduced && Array.isArray(reduced.frames) && reduced.frames.length) {
+      return { ...merged, name: reduced.name || merged.name, description: reduced.description || merged.description, frames: reduced.frames, tones: Array.isArray(reduced.tones) && reduced.tones.length ? reduced.tones : merged.tones };
+    }
+  } catch (err) {
+    console.warn('Ontology synthesis pass failed, using heuristic merge:', err.message);
+  }
+  return merged;
 }
 
 export async function aiCompressText(text, onProgress, chunkCount = 4) {
   if (!text || text.length <= 5000) return text;
-  
-  const chunkSize = Math.ceil(text.length / chunkCount);
-  const chunks = [];
-  for (let i = 0; i < text.length; i += chunkSize) {
-    chunks.push(text.slice(i, i + chunkSize));
-  }
-  
-  let combinedSummary = '';
-  
-  for (let i = 0; i < chunks.length; i++) {
-    if (onProgress) onProgress(i + 1, chunks.length);
-    
-    const systemPrompt = `You are an expert summarizer. Your task is to extract the core narrative, key actors, main events, and underlying themes from the provided text segment.
+
+  // chunkCount is a minimum number of rounds; chunks never exceed CHUNK_SIZE chars.
+  const chunkSize = Math.max(2000, Math.min(CHUNK_SIZE, Math.ceil(text.length / chunkCount)));
+
+  const systemPrompt = `You are an expert summarizer. Your task is to extract the core narrative, key actors, main events, and underlying themes from the provided text segment.
 Return ONLY a valid JSON object with the following structure:
 {
   "summary": "A detailed and highly concentrated summary of the text segment, preserving key terminology, themes, and narrative elements."
 }`;
-    const userPrompt = `Please summarize this text segment:\n\n${chunks[i]}`;
-    
-    try {
-      const result = await callLLM(systemPrompt, userPrompt);
-      if (result && result.summary) {
-        combinedSummary += `[Segment ${i + 1} Summary]:\n${result.summary}\n\n`;
-      }
-    } catch (err) {
-      // If the error is a critical API error (like 429 All models exhausted or 401), abort the whole compression process!
-      if (err.message.includes('API Error')) {
-        throw err;
-      }
-      
-      combinedSummary += `[Segment ${i + 1} Summary (Timeout Fallback)]: ${chunks[i].slice(0, 5000)}...\n\n`;
-    }
+
+  const run = await runChunkedRounds(text, async (chunk, i) => {
+    const result = await callLLM(systemPrompt, `Please summarize this text segment:
+
+${chunk}`);
+    if (!result || !result.summary) throw new Error('Model returned no summary.');
+    return `[Segment ${i + 1} Summary]:
+${result.summary}
+
+`;
+  }, { onProgress, chunkSize });
+
+  if (run.failedRounds.length > 0) {
+    // Never hand back a silently incomplete summary: the source text stays untouched in the UI.
+    throw new ChunkedRoundsError(
+      `Compression failed (${run.failedRounds.length}/${run.total} rounds, retried once). ${describeFailedRounds(run.failedRounds, run.total)}`,
+      run.failedRounds, run.total);
   }
-  
-  return combinedSummary;
+  return run.results.join('');
 }
 
 /**

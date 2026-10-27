@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store';
 import { Layers, Plus, Settings as SettingsIcon, Trash2, ArrowRight, Sparkles, Loader2, ArrowLeft, AlertCircle, Paperclip, Mail, Key, BookOpen } from 'lucide-react';
 import { generateProjectOntology, aiCompressText, generateTextForTopic } from '../services/LLMService';
-import { parseFile } from '../utils/fileParser';
+import { parseFilesBatch } from '../utils/fileParser';
 import { useTranslation } from 'react-i18next';
 import { TutorialModal } from '../components/TutorialModal';
 
@@ -54,6 +54,9 @@ export function Dashboard() {
   const [isDragging, setIsDragging] = useState(false);
   const [isCompressing, setIsCompressing] = useState(false);
   const [compressProgress, setCompressProgress] = useState(null);
+  const [uploadProgress, setUploadProgress] = useState(null); // e.g. "2/7 name.pdf"
+  const [uploadErrors, setUploadErrors] = useState([]); // [{name, message}]
+  const [ontologyProgress, setOntologyProgress] = useState(null); // e.g. "round 3 / 8"
   const [compressChunks, setCompressChunks] = useState(4);
 
   const [newProject, setNewProject] = useState({
@@ -88,16 +91,22 @@ export function Dashboard() {
     setCreationStep(2);
   };
 
-  const processFile = async (file) => {
+  // Parse a batch of files: per-file errors are collected and shown together afterwards.
+  const processFiles = async (files) => {
+    const list = files.filter(Boolean);
+    if (list.length === 0) return;
     setIsUploading(true);
     setGenerationError(null);
+    setUploadErrors([]);
     try {
-      const text = await parseFile(file);
-      setSourceText(prev => prev ? prev + '\n\n' + text : text);
+      const { text, errors } = await parseFilesBatch(list, { onProgress: setUploadProgress });
+      if (text) setSourceText(prev => prev ? prev + '\n\n' + text : text);
+      setUploadErrors(errors);
     } catch (err) {
-      setGenerationError(`Failed to parse file: ${err.message}`);
+      setGenerationError(`Failed to parse files: ${err.message}`);
     } finally {
       setIsUploading(false);
+      setUploadProgress(null);
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
@@ -119,10 +128,7 @@ export function Dashboard() {
   };
 
   const handleFileUpload = async (e) => {
-    const files = Array.from(e.target.files || []);
-    for (const file of files) {
-      if (file) await processFile(file);
-    }
+    await processFiles(Array.from(e.target.files || []));
   };
 
   const handleDragOver = (e) => {
@@ -139,10 +145,7 @@ export function Dashboard() {
     e.preventDefault();
     setIsDragging(false);
     if (isGenerating || isUploading) return;
-    const files = Array.from(e.dataTransfer.files || []);
-    for (const file of files) {
-      if (file) await processFile(file);
-    }
+    await processFiles(Array.from(e.dataTransfer.files || []));
   };
 
   const handleGenerateOntology = async () => {
@@ -160,7 +163,13 @@ export function Dashboard() {
         setSourceText(textToProcess); // Save generated essay as source text
       }
       
-      const ontology = await generateProjectOntology(textToProcess);
+      const ontology = await generateProjectOntology(textToProcess, (current, total, info) => {
+        setOntologyProgress(info?.phase === 'synthesize' ? 'merging' : `round ${current} / ${total}${info?.phase === 'retry' ? ' (retry)' : ''}`);
+      });
+      if (ontology.failedRounds?.length) {
+        setGenerationError(`Ontology generated, but ${ontology.failedRounds.length}/${ontology.totalRounds} rounds failed after one retry and were not included: ` +
+          ontology.failedRounds.map(f => `round ${f.round} (${f.error})`).join('; '));
+      }
       setNewProject({
         name: ontology.name || '',
         description: ontology.description || '',
@@ -172,6 +181,7 @@ export function Dashboard() {
       setGenerationError(err.message);
     } finally {
       setIsGenerating(false);
+      setOntologyProgress(null);
     }
   };
 
@@ -332,7 +342,6 @@ export function Dashboard() {
                         className={`w-full px-4 py-3 bg-slate-50 border ${isDragging ? 'border-rose-500 ring-2 ring-rose-200 bg-rose-50' : 'border-slate-200'} rounded-lg h-48 focus:ring-2 focus:ring-rose-500 focus:outline-none transition-all text-sm`}
                         placeholder={isDragging ? t("Drop file here to extract text...") : t("Paste source text here... or drag & drop a file (supports 20+ formats: EPUB, PDF, DOCX, XLSX, TXT, HTML...)")}
                         disabled={isGenerating || isUploading || isCompressing}
-                        maxLength={400000}
                       />
                     )}
                    
@@ -383,12 +392,24 @@ export function Dashboard() {
                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded transition-colors disabled:opacity-50"
                      >
                        {isUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Paperclip className="w-4 h-4" />}
-                       {isUploading ? t('Parsing File...') : t('Import from File (PDF, DOCX...)')}
+                       {isUploading ? (t('Parsing File...') + (uploadProgress ? ` ${uploadProgress}` : '')) : t('Import from File (PDF, DOCX...)')}
                      </button>
                     </div>
                   </div>
                    )}
                 </div>
+
+                 {uploadErrors.length > 0 && (
+                   <div className="p-4 bg-amber-50 text-amber-800 border border-amber-200 rounded-lg text-sm flex gap-3 items-start">
+                     <AlertCircle className="w-5 h-5 shrink-0" />
+                     <div className="min-w-0">
+                       <p className="font-bold mb-1">{uploadErrors.length} file(s) could not be imported (other files were kept):</p>
+                       <ul className="list-disc pl-5 space-y-0.5 break-words">
+                         {uploadErrors.map((e, i) => <li key={i}><span className="font-mono">{e.name}</span>: {e.message}</li>)}
+                       </ul>
+                     </div>
+                   </div>
+                 )}
 
                  {generationError && (
                    <div className="p-4 bg-red-50 text-red-700 border border-red-200 rounded-lg text-sm flex gap-3 items-start">
@@ -426,7 +447,7 @@ export function Dashboard() {
                      {isGenerating ? (
                        <>
                          <Loader2 className="w-5 h-5 animate-spin" />
-                         {inputMode === 'topic' ? t('Generating Essay & Ontology...') : t('Analyzing Text...')}
+                         {inputMode === 'topic' ? t('Generating Essay & Ontology...') : t('Analyzing Text...')}{ontologyProgress ? ` (${ontologyProgress})` : ''}
                        </>
                      ) : (
                        <>

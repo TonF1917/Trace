@@ -7,9 +7,15 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "predev": "node scripts/copy-ocr-assets.mjs",
+    "prebuild": "node scripts/copy-ocr-assets.mjs",
+    "postinstall": "node scripts/copy-ocr-assets.mjs",
+    "test": "node tests/chunking.test.mjs && node tests/pdf-ocr.test.mjs"
   },
   "dependencies": {
+    "@tesseract.js-data/chi_sim": "^1.0.0",
+    "@tesseract.js-data/eng": "^1.0.0",
     "axios": "^1.17.0",
     "clsx": "^2.1.1",
     "concurrently": "^10.0.3",

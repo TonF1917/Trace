@@ -118,9 +118,11 @@ export function Dashboard() {
     }
   };
 
-  const handleFileUpload = (e) => {
-    const file = e.target.files[0];
-    if (file) processFile(file);
+  const handleFileUpload = async (e) => {
+    const files = Array.from(e.target.files || []);
+    for (const file of files) {
+      if (file) await processFile(file);
+    }
   };
 
   const handleDragOver = (e) => {
@@ -137,8 +139,10 @@ export function Dashboard() {
     e.preventDefault();
     setIsDragging(false);
     if (isGenerating || isUploading) return;
-    const file = e.dataTransfer.files[0];
-    if (file) await processFile(file);
+    const files = Array.from(e.dataTransfer.files || []);
+    for (const file of files) {
+      if (file) await processFile(file);
+    }
   };
 
   const handleGenerateOntology = async () => {
@@ -365,11 +369,12 @@ export function Dashboard() {
                          </div>
                        )}
                        <input 
-                         type="file"  
-                       ref={fileInputRef} 
-                       className="hidden" 
-                       accept="*" 
-                       onChange={handleFileUpload} 
+                         type="file"
+                       ref={fileInputRef}
+                       className="hidden"
+                       accept="*"
+                       multiple
+                       onChange={handleFileUpload}
                      />
                      <button
                        type="button"

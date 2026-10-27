@@ -155,9 +155,11 @@ export function Workspace() {
     }
   };
 
-  const handleFileUpload = (e) => {
-    const file = e.target.files[0];
-    if (file) processFile(file);
+  const handleFileUpload = async (e) => {
+    const files = Array.from(e.target.files || []);
+    for (const file of files) {
+      if (file) await processFile(file);
+    }
   };
 
   const handleDragOver = (e) => {
@@ -174,8 +176,10 @@ export function Workspace() {
     e.preventDefault();
     setIsDragging(false);
     if (isUploading) return;
-    const file = e.dataTransfer.files[0];
-    if (file) await processFile(file);
+    const files = Array.from(e.dataTransfer.files || []);
+    for (const file of files) {
+      if (file) await processFile(file);
+    }
   };
 
   // Derive sources from articles dynamically and memoize to prevent graph explosion on hover
@@ -903,7 +907,7 @@ export function Workspace() {
                   <span className="text-[10px] mr-2 bg-white/80 px-1 rounded text-slate-400">
                     {newArticle.lede.length > 0 && `${newArticle.lede.length.toLocaleString()} ${t('chars')}`}
                   </span>
-                  <input type="file" ref={fileInputRef} className="hidden" accept="*" onChange={handleFileUpload} />
+                  <input type="file" ref={fileInputRef} className="hidden" accept="*" multiple onChange={handleFileUpload} />
                   <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isUploading} className="flex items-center gap-1 px-2 py-1 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 text-[10px] font-bold rounded shadow-sm transition-colors" title={t("Import from File (PDF, DOCX, TXT...)")}>
                     {isUploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Paperclip className="w-3 h-3" />}
                     {isUploading ? t('Parsing...') : t('Import')}

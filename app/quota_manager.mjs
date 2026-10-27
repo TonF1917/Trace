@@ -6,8 +6,10 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 export const QUOTA_FILE = path.resolve(__dirname, 'quota_usage.json');
-export const UPSTREAM_CHAT_URL = 'http://127.0.0.1:8045/v1/chat/completions';
-export const UPSTREAM_AUTH = 'Bearer sk-18c47b145b9048c096ea8d81906a253c';
+// Public pool upstream: the author's hosted relay (backed by the vm105 Antigravity relay).
+// Override with TRACE_UPSTREAM_URL / TRACE_UPSTREAM_KEY env vars when self-hosting.
+export const UPSTREAM_CHAT_URL = process.env.TRACE_UPSTREAM_URL || 'https://relay.yevgeni.eu.cc/v1/chat/completions';
+export const UPSTREAM_AUTH = process.env.TRACE_UPSTREAM_KEY || 'Bearer sk-18c47b145b9048c096ea8d81906a253c';
 export const DEFAULT_MODEL = 'gemini-3.8-flash-high';
 export const TOTAL_ALLOCATED = 20000000;
 
@@ -162,7 +164,7 @@ export async function handleRelayChatCompletions(req, res) {
     res.setHeader('Content-Type', 'application/json');
     return res.end(JSON.stringify({
       error: {
-        message: 'Trace Relay failed to communicate with upstream Antigravity server.',
+        message: 'Trace Relay failed to communicate with the upstream pool server.',
         details: error.message
       }
     }));

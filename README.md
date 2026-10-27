@@ -89,7 +89,7 @@
    npm run dev
    ```
 4. **Launch the workspace**:
-   Open `http://localhost:5173` in your browser, or double-click `Trace.exe` (Windows) / `Trace.command` (macOS/Linux) in the root directory.
+   Open `http://localhost:5173` in your browser, or double-click `Trace.bat` (Windows) / `Trace.command` (macOS/Linux) in the root directory. The Windows launcher auto-detects Node.js and installs it (via winget or a portable runtime) if it is missing. Closing the launcher window stops Trace's own server only — it never touches other Node processes on your machine.
 
 ---
 
@@ -200,7 +200,7 @@
    npm run dev
    ```
 4. **打开工作台**：
-   在浏览器中访问 `http://localhost:5173`，或直接双击项目根目录下的 `Trace.exe`（Windows）/ `Trace.command`（macOS/Linux）。
+   在浏览器中访问 `http://localhost:5173`，或直接双击项目根目录下的 `Trace.bat`（Windows）/ `Trace.command`（macOS/Linux）。Windows 启动器会自动检测 Node.js，缺失时通过 winget 或便携运行时自动安装；关闭启动器窗口只会停止 Trace 自己的服务，不会影响电脑上的其他 Node 进程。
 
 ---
 

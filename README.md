@@ -91,6 +91,8 @@
 4. **Launch the workspace**:
    Open `http://localhost:5173` in your browser, or double-click `Trace.bat` (Windows) / `Trace.command` (macOS/Linux) in the root directory. The Windows launcher auto-detects Node.js and installs it (via winget or a portable runtime) if it is missing. Closing the launcher window stops Trace's own server only — it never touches other Node processes on your machine.
 
+   > **Windows "Windows protected your PC" (SmartScreen) prompt:** this appears for any unsigned script downloaded from the internet (the zip carries a web-origin mark). Either click **More info → Run anyway**, or unblock once before extracting: right-click the downloaded zip → Properties → tick **Unblock** → OK (or run `Unblock-File .\Trace-main.zip` in PowerShell). Using `git clone` avoids the prompt entirely. If Trace.app is blocked on macOS, right-click it → Open.
+
 ---
 
 ### Step-by-Step Tutorial
@@ -201,6 +203,8 @@
    ```
 4. **打开工作台**：
    在浏览器中访问 `http://localhost:5173`，或直接双击项目根目录下的 `Trace.bat`（Windows）/ `Trace.command`（macOS/Linux）。Windows 启动器会自动检测 Node.js，缺失时通过 winget 或便携运行时自动安装；关闭启动器窗口只会停止 Trace 自己的服务，不会影响电脑上的其他 Node 进程。
+
+   > **Windows 弹出“Windows 已保护你的电脑”（SmartScreen）：** 从网上下载的未签名脚本都会触发（zip 带有网络来源标记）。点击 **更多信息 → 仍要运行** 即可；或在解压前先解除锁定：右键下载的 zip → 属性 → 勾选 **解除锁定** → 确定（或在 PowerShell 运行 `Unblock-File .\Trace-main.zip`）。用 `git clone` 获取则完全不会弹出。macOS 若拦截 Trace.app，请右键 → 打开。
 
 ---
 

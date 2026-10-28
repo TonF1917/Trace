@@ -11,7 +11,8 @@ import { GraphAnalyticsView } from './GraphAnalyticsView';
 import { analyzeArticle, extractMoreRelationships, generateTextForTopic, connectExistingEntities, consolidateEntities } from '../services/LLMService';
 import Papa from 'papaparse';
 import { toPng, toJpeg } from 'html-to-image';
-import { parseFilesBatch } from '../utils/fileParser';
+import { parseFileRecord } from '../utils/fileParser';
+import { deriveSourceName, deriveHeadline, createBatchItems, runBatch, resetFailed, summarizeBatch, STATUS } from '../utils/batchImport';
 import { Paperclip, Search, Sparkles, Network } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { useTranslation } from 'react-i18next';
@@ -56,6 +57,7 @@ export function Workspace() {
   const [uploadErrors, setUploadErrors] = useState([]); // [{name, message}]
   const [roundProgress, setRoundProgress] = useState(null); // e.g. "round 3 / 8"
   const [isDragging, setIsDragging] = useState(false);
+  const [editingSourceId, setEditingSourceId] = useState(null);
 
   const [selectedSource, setSelectedSourceState] = useState(() => new URLSearchParams(window.location.search).get('source'));
   const [selectedFrame, setSelectedFrameState] = useState(() => new URLSearchParams(window.location.search).get('frame'));
@@ -149,12 +151,28 @@ export function Workspace() {
   const processFiles = async (files) => {
     const list = files.filter(Boolean);
     if (list.length === 0) return;
-    setIsUploading(true);
     setUploadErrors([]);
+    if (list.length > 1) {
+      // Several files: one article per file, queued for sequential analysis.
+      if (batchRunning) return;
+      try { await startBatchImport(list); } finally { if (fileInputRef.current) fileInputRef.current.value = ''; }
+      return;
+    }
+    setIsUploading(true);
     try {
-      const { text, errors } = await parseFilesBatch(list, { onProgress: setUploadProgress });
-      if (text) setNewArticle(prev => ({ ...prev, lede: prev.lede ? prev.lede + '\n\n' + text : text }));
-      setUploadErrors(errors);
+      const rec = await parseFileRecord(list[0], { onStatus: (s) => setUploadProgress(`${list[0].name} \u00b7 ${s}`) });
+      if (rec.error) {
+        setUploadErrors([{ name: rec.fileName, message: rec.error }]);
+      } else {
+        // Single file: fill the form for manual editing (existing values are never overwritten).
+        setNewArticle(prev => ({
+          ...prev,
+          lede: prev.lede ? prev.lede + '\n\n' + rec.text : rec.text,
+          source_name: prev.source_name || deriveSourceName(rec.meta, rec.fileName),
+          headline: prev.headline || deriveHeadline(rec.meta, rec.fileName),
+          date: rec.meta?.date || prev.date,
+        }));
+      }
     } catch (err) {
       setUploadErrors([{ name: '(batch)', message: err.message }]);
     } finally {
@@ -277,9 +295,10 @@ export function Workspace() {
     }
   };
 
-  const handleProcessLLM = async (article) => {
-    setProcessingId(article.id);
-    try {
+  // Core analysis of one article. Throws on failure (callers decide how to surface it).
+  // Returns the raw analysis result (may carry failedRounds).
+  const analyzeAndStore = async (article, { onRound = reportRound } = {}) => {
+    {
       const headlineText = article.headline || article.title || 'Untitled';
       const ledeText = article.lede || article.content || '';
       const textToAnalyze = `${headlineText}\n\n${ledeText}`;
@@ -287,9 +306,8 @@ export function Workspace() {
       
       const customRels = project.relations || ['Opposes / Blames'];
       const effectiveCount = targetNodeCount === '' ? 10 : Number(targetNodeCount);
-      const result = await analyzeArticle(safeText, project.frames, project.tones, customRels, effectiveCount, reportRound);
-      warnFailedRounds(result);
-      
+      const result = await analyzeArticle(safeText, project.frames, project.tones, customRels, effectiveCount, onRound);
+
       if (result.relationships && result.relationships.length > 0) {
         const first = result.relationships[0];
         
@@ -361,6 +379,15 @@ export function Workspace() {
           rationale: result.rationale || ''
         });
       }
+      return result;
+    }
+  };
+
+  const handleProcessLLM = async (article) => {
+    setProcessingId(article.id);
+    try {
+      const result = await analyzeAndStore(article);
+      warnFailedRounds(result);
     } catch (err) {
       alert(`Processing failed: ${err.message}`);
     } finally {
@@ -369,8 +396,60 @@ export function Workspace() {
     }
   };
 
-  // Auto-analyze and unfold topology when entering a project with unprocessed articles
+  // ---- multi-file import: one file = one article, analyzed sequentially ----------------
   const autoAnalyzedRef = useRef(new Set());
+  const [batchItems, setBatchItems] = useState([]);
+  const [batchRunning, setBatchRunning] = useState(false);
+  const batchItemsRef = useRef([]);
+
+  const batchDeps = () => ({
+    projectId,
+    makeId: uuidv4,
+    parse: (file, opts) => parseFileRecord(file, opts),
+    getExistingArticles: () => useStore.getState().articles.filter(a => a.projectId === projectId),
+    addArticle: (a) => {
+      autoAnalyzedRef.current.add(a.id); // keep the "auto-analyze first article" effect out of the way
+      useStore.getState().addArticle(a);
+    },
+    analyze: async (article, { onRound }) => {
+      setProcessingId(article.id);
+      try {
+        const result = await analyzeAndStore(article, { onRound });
+        if (result?.failedRounds?.length) {
+          return { warning: `${result.failedRounds.length}/${result.totalRounds} extraction round(s) failed and are not included` };
+        }
+        return {};
+      } finally {
+        setProcessingId(null);
+      }
+    },
+    onChange: (items) => { batchItemsRef.current = items; setBatchItems(items); },
+  });
+
+  const executeBatch = async (items) => {
+    setBatchRunning(true);
+    setProcessingId('batch_import');
+    try {
+      await runBatch(items, batchDeps());
+    } finally {
+      setProcessingId(null);
+      setBatchRunning(false);
+    }
+  };
+
+  const startBatchImport = async (files) => {
+    const items = createBatchItems(files);
+    batchItemsRef.current = items;
+    setBatchItems(items);
+    await executeBatch(items);
+  };
+
+  const retryFailedBatch = async () => {
+    if (batchRunning) return;
+    await executeBatch(resetFailed(batchItemsRef.current));
+  };
+
+  // Auto-analyze and unfold topology when entering a project with unprocessed articles
   useEffect(() => {
     if (!project || isExporting) return;
     const unprocessed = projectArticles.filter(a => !a.isProcessed);
@@ -882,6 +961,53 @@ export function Workspace() {
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {batchItems.length > 0 && (() => {
+            const sum = summarizeBatch(batchItems);
+            const statusText = (it) => {
+              switch (it.status) {
+                case STATUS.PENDING: return t('Waiting');
+                case STATUS.PARSING: return it.detail || t('Parsing...');
+                case STATUS.QUEUED: return t('Queued');
+                case STATUS.ANALYZING: return it.rounds ? t('Analyzing round {{current}}/{{total}}', { current: it.round, total: it.rounds }) : t('Analyzing...');
+                case STATUS.DONE: return it.note ? `${t('Done')} (${it.note})` : t('Done');
+                case STATUS.SKIPPED: return it.skipReason === 'duplicate-file' ? t('Skipped duplicate (same file)') : t('Skipped duplicate (same content)');
+                default: return `${t('Failed')}: ${it.error || ''}`;
+              }
+            };
+            const tone = (st) => st === STATUS.DONE ? 'text-emerald-700' : st === STATUS.FAILED ? 'text-red-600' : st === STATUS.SKIPPED ? 'text-slate-400' : 'text-amber-700';
+            return (
+              <div data-testid="batch-panel" className="bg-white border border-indigo-200 rounded-lg p-4 shadow-sm">
+                <div className="flex justify-between items-center mb-2">
+                  <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">{t('Batch Import')}</h4>
+                  {!batchRunning && (
+                    <button type="button" onClick={() => setBatchItems([])} className="text-[10px] font-bold text-slate-400 hover:text-slate-600">{t('Dismiss')}</button>
+                  )}
+                </div>
+                <ul className="space-y-1.5 text-xs">
+                  {batchItems.map((it, i) => (
+                    <li key={i} data-status={it.status} className="flex flex-col">
+                      <span className="font-mono text-slate-700 break-all">{it.fileName}</span>
+                      <span className={`${tone(it.status)} break-words`}>
+                        {(it.status === STATUS.PARSING || it.status === STATUS.ANALYZING) && <Loader2 className="inline w-3 h-3 animate-spin mr-1" />}
+                        {statusText(it)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                {!batchRunning && (
+                  <div data-testid="batch-summary" className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
+                    <span className="text-xs text-slate-600">
+                      {t('{{done}} analyzed, {{failed}} failed, {{skipped}} skipped (of {{total}})', sum)}
+                    </span>
+                    {sum.failed > 0 && (
+                      <button type="button" onClick={retryFailedBatch} className="px-2 py-1 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded">{t('Retry failed')}</button>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
           {showResearchForm && (
             <form onSubmit={handleResearchTopic} className="bg-purple-50 border border-purple-200 rounded-lg p-4 shadow-sm relative">
               <h4 className="text-xs font-bold text-slate-800 mb-1 uppercase tracking-wider flex items-center gap-1">
@@ -928,7 +1054,7 @@ export function Workspace() {
                     {newArticle.lede.length > 0 && `${newArticle.lede.length.toLocaleString()} ${t('chars')}`}
                   </span>
                   <input type="file" ref={fileInputRef} className="hidden" accept="*" multiple onChange={handleFileUpload} />
-                  <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isUploading} className="flex items-center gap-1 px-2 py-1 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 text-[10px] font-bold rounded shadow-sm transition-colors" title={t("Import from File (PDF, DOCX, TXT...)")}>
+                  <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isUploading || batchRunning} className="flex items-center gap-1 px-2 py-1 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 text-[10px] font-bold rounded shadow-sm transition-colors" title={t("Import from File (PDF, DOCX, TXT...)")}>
                     {isUploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Paperclip className="w-3 h-3" />}
                     {isUploading ? (t('Parsing...') + (uploadProgress ? ` ${uploadProgress}` : '')) : t('Import')}
                   </button>
@@ -970,7 +1096,25 @@ export function Workspace() {
               }}
             >
               <div className="flex justify-between items-start mb-2">
-                <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider">{article.source_name}</span>
+                {editingSourceId === article.id ? (
+                  <input
+                    autoFocus
+                    defaultValue={article.source_name}
+                    className="text-[10px] font-black uppercase tracking-wider border border-slate-300 rounded px-1 w-48"
+                    onBlur={(e) => {
+                      const v = e.target.value.trim();
+                      if (v && v !== article.source_name) updateArticle(article.id, { source_name: v, source_id: v.toLowerCase().replace(/\s+/g, '-') });
+                      setEditingSourceId(null);
+                    }}
+                    onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur(); if (e.key === 'Escape') setEditingSourceId(null); }}
+                  />
+                ) : (
+                  <span
+                    className="text-[10px] font-black uppercase text-slate-500 tracking-wider cursor-text hover:text-rose-600"
+                    title={t('Click to edit source name')}
+                    onClick={() => setEditingSourceId(article.id)}
+                  >{article.source_name}</span>
+                )}
                 <button onClick={() => deleteArticle(article.id)} className="text-slate-300 hover:text-red-500"><Trash2 className="w-3 h-3" /></button>
               </div>
               <h3 className="text-sm font-bold text-slate-900 leading-snug mb-2">{article.headline || article.title || t('Untitled Document')}</h3>

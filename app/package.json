@@ -11,7 +11,7 @@
     "predev": "node scripts/copy-ocr-assets.mjs",
     "prebuild": "node scripts/copy-ocr-assets.mjs",
     "postinstall": "node scripts/copy-ocr-assets.mjs",
-    "test": "node tests/chunking.test.mjs && node tests/pdf-ocr.test.mjs"
+    "test": "node tests/chunking.test.mjs && node tests/pdf-ocr.test.mjs && node tests/batch-import.test.mjs"
   },
   "dependencies": {
     "@tesseract.js-data/chi_sim": "^1.0.0",

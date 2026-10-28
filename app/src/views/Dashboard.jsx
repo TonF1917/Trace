@@ -3,7 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store';
 import { Layers, Plus, Settings as SettingsIcon, Trash2, ArrowRight, Sparkles, Loader2, ArrowLeft, AlertCircle, Paperclip, Mail, Key, BookOpen } from 'lucide-react';
 import { generateProjectOntology, aiCompressText, generateTextForTopic } from '../services/LLMService';
-import { parseFilesBatch } from '../utils/fileParser';
+import { parseFilesStructured, combineRecordText } from '../utils/fileParser';
+import { planArticlesFromRecords, fileKey } from '../utils/batchImport';
+import { v4 as uuidv4 } from 'uuid';
 import { useTranslation } from 'react-i18next';
 import { TutorialModal } from '../components/TutorialModal';
 
@@ -43,6 +45,9 @@ export function Dashboard() {
   const [isCreating, setIsCreating] = useState(false);
   const [creationStep, setCreationStep] = useState(1);
   const [sourceText, setSourceText] = useState('');
+  // Per-file records of imported files: the combined text drives ontology generation, while
+  // project creation turns each record into its own article.
+  const [importedRecords, setImportedRecords] = useState([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationError, setGenerationError] = useState(null);
   const [inputMode, setInputMode] = useState('text'); // 'text' or 'topic'
@@ -75,6 +80,7 @@ export function Dashboard() {
     setIsCreating(false);
     setCreationStep(1);
     setSourceText('');
+    setImportedRecords([]);
     setResearchTopic('');
     setGenerationError(null);
     setNewProject({ name: '', description: '', frames: '', tones: '', relations: '' });
@@ -99,9 +105,21 @@ export function Dashboard() {
     setGenerationError(null);
     setUploadErrors([]);
     try {
-      const { text, errors } = await parseFilesBatch(list, { onProgress: setUploadProgress });
+      // Skip files already imported in this session (same name + size).
+      const known = new Set(importedRecords.map(r => fileKey(r.fileName, r.size)));
+      const dupErrors = [];
+      const fresh = list.filter((f) => {
+        const key = fileKey(f.name, f.size);
+        if (known.has(key)) { dupErrors.push({ name: f.name, message: 'skipped duplicate (same file already imported)' }); return false; }
+        known.add(key);
+        return true;
+      });
+      const records = await parseFilesStructured(fresh, { onProgress: setUploadProgress });
+      const ok = records.filter(r => !r.error);
+      const text = ok.map(combineRecordText).join('\n\n');
       if (text) setSourceText(prev => prev ? prev + '\n\n' + text : text);
-      setUploadErrors(errors);
+      if (ok.length) setImportedRecords(prev => [...prev, ...ok]);
+      setUploadErrors([...records.filter(r => r.error).map(r => ({ name: r.fileName, message: r.error })), ...dupErrors]);
     } catch (err) {
       setGenerationError(`Failed to parse files: ${err.message}`);
     } finally {
@@ -210,7 +228,26 @@ export function Dashboard() {
     
     const { activeProjectId, addArticle } = useStore.getState();
     
-    if (sourceText.trim()) {
+    // Imported files (text mode): one article per file; pasted text typed around them is kept
+    // as an extra article only while the combined file blocks are still intact in the editor.
+    if (inputMode === 'text' && importedRecords.length > 0) {
+      const { articles: fileArticles } = planArticlesFromRecords(importedRecords, { projectId: activeProjectId, existingArticles: [], makeId: uuidv4 });
+      fileArticles.forEach(a => addArticle(a));
+      let remainder = sourceText;
+      const intact = importedRecords.every(r => remainder.includes(combineRecordText(r)));
+      if (intact) {
+        importedRecords.forEach(r => { remainder = remainder.replace(combineRecordText(r), ''); });
+        if (remainder.trim()) {
+          addArticle({
+            projectId: activeProjectId,
+            headline: "Source Document",
+            lede: remainder.trim(),
+            source_name: "Upload",
+            date: new Date().toISOString()
+          });
+        }
+      }
+    } else if (sourceText.trim()) {
       addArticle({
         projectId: activeProjectId,
         headline: inputMode === 'topic' ? `Research: ${researchTopic}` : "Source Document",

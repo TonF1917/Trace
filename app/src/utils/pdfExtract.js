@@ -61,8 +61,9 @@ async function ocrPage(page, { createCanvas, ocr }) {
  * @param opts.ocr          (canvas) => Promise<string>
  * @param opts.onStatus     optional (message) => void
  * @param opts.maxOcrPages  default 50
+ * @param opts.stats        optional out-object; receives { pages, ocrPages }
  */
-export async function extractPdfText(pdf, { createCanvas, ocr, onStatus, maxOcrPages = PDF_OCR_MAX_PAGES }) {
+export async function extractPdfText(pdf, { createCanvas, ocr, onStatus, maxOcrPages = PDF_OCR_MAX_PAGES, stats }) {
   const n = pdf.numPages;
   const pages = [];
 
@@ -83,6 +84,7 @@ export async function extractPdfText(pdf, { createCanvas, ocr, onStatus, maxOcrP
   const selected = ordered.slice(0, maxOcrPages);
   const skipped = ordered.slice(maxOcrPages).map(({ idx }) => idx + 1).sort((a, b) => a - b);
   const selectedSet = new Set(selected.map(({ idx }) => idx));
+  if (stats) { stats.pages = n; stats.ocrPages = selected.length; }
 
   let done = 0;
   for (let idx = 0; idx < pages.length; idx++) {

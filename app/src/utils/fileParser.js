@@ -5,6 +5,7 @@ import * as XLSX from 'xlsx';
 import JSZip from 'jszip';
 import { ocrImage, mergeOcrText } from './ocr';
 import { extractPdfText } from './pdfExtract';
+import { deriveMeta } from './batchImport';
 
 // Use Vite's native worker support to avoid CORS issues with CDNs
 pdfjsLib.GlobalWorkerOptions.workerPort = new pdfjsWorker();
@@ -178,6 +179,7 @@ async function parseUnknown(file, extension) {
  * the chunked multi-round processing in LLMService.
  * @param file File
  * @param opts.onStatus optional (message) => void for sub-step progress (e.g. OCR pages)
+ * @param opts.extra    optional out-object; PDFs fill { pdfInfo, pages, ocrPages }
  */
 export async function parseFile(file, opts = {}) {
   const extension = (file.name.split('.').pop() || '').toLowerCase();
@@ -207,11 +209,18 @@ export async function parseFile(file, opts = {}) {
     const arrayBuffer = await file.arrayBuffer();
     const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
     try {
-      return await extractPdfText(pdf, {
+      if (opts.extra) {
+        try { opts.extra.pdfInfo = (await pdf.getMetadata())?.info || null; } catch { opts.extra.pdfInfo = null; }
+      }
+      const stats = {};
+      const text = await extractPdfText(pdf, {
         createCanvas: createDomCanvas,
         ocr: (canvas) => withOcrContext(() => ocrImage(canvas)),
         onStatus: opts.onStatus,
+        stats,
       });
+      if (opts.extra) Object.assign(opts.extra, { pages: stats.pages ?? pdf.numPages, ocrPages: stats.ocrPages ?? 0 });
+      return text;
     } finally {
       pdf.destroy?.();
     }
@@ -262,26 +271,61 @@ export async function parseFile(file, opts = {}) {
 }
 
 /**
- * Parse several files, collecting per-file errors instead of failing the batch.
- * Each file's text is prefixed with a `=== <filename> ===` header for provenance.
- * @returns {{ text: string, parsed: {name, text}[], errors: {name, message}[] }}
+ * Parse one file into a structured record. Never throws: failures land in `error`.
+ * @returns {{fileName, size, text, meta:{title,author,date,pages,ocrPages}, error: string|null}}
  */
-export async function parseFilesBatch(files, { onProgress } = {}) {
-  const parsed = [];
-  const errors = [];
+export async function parseFileRecord(file, { onStatus } = {}) {
+  const extra = {};
+  const record = { fileName: file.name, size: file.size, text: '', meta: null, error: null };
+  try {
+    const raw = await parseFile(file, { onStatus, extra });
+    record.text = (raw || '').trim();
+    if (!record.text) record.error = 'No text could be extracted from this file.';
+  } catch (err) {
+    record.error = err?.message || String(err);
+  }
+  record.meta = deriveMeta({
+    lastModified: file.lastModified,
+    pdfInfo: extra.pdfInfo,
+    pages: extra.pages ?? null,
+    ocrPages: extra.ocrPages ?? 0,
+  });
+  return record;
+}
+
+/**
+ * Parse several files sequentially into structured records (one per file, errors kept
+ * in-record so one bad file never stops the batch).
+ * @returns {Promise<{fileName,size,text,meta,error}[]>}
+ */
+export async function parseFilesStructured(files, { onProgress } = {}) {
+  const records = [];
   const total = files.length;
   for (let i = 0; i < total; i++) {
     const file = files[i];
     const base = `${i + 1}/${total} ${file.name}`;
     onProgress?.(base);
-    try {
-      const raw = await parseFile(file, { onStatus: (s) => onProgress?.(`${base} · ${s}`) });
-      const body = (raw || '').trim();
-      if (!body) throw new Error('No text could be extracted from this file.');
-      parsed.push({ name: file.name, text: `=== ${file.name} ===\n${body}` });
-    } catch (err) {
-      errors.push({ name: file.name, message: err?.message || String(err) });
-    }
+    records.push(await parseFileRecord(file, { onStatus: (s) => onProgress?.(`${base} · ${s}`) }));
   }
-  return { text: parsed.map((p) => p.text).join('\n\n'), parsed, errors };
+  return records;
+}
+
+const NL = String.fromCharCode(10);
+
+/** Combined `=== name ===` text of the successfully parsed records. */
+export const combineRecordText = (r) => `=== ${r.fileName} ===${NL}${r.text}`;
+
+/**
+ * Backward-compatible: all files' text concatenated with `=== <filename> ===` headers.
+ * @returns {{ text: string, parsed: {name, text}[], errors: {name, message}[], records }}
+ */
+export async function parseFilesBatch(files, opts = {}) {
+  const records = await parseFilesStructured(files, opts);
+  const ok = records.filter((r) => !r.error);
+  return {
+    text: ok.map(combineRecordText).join(NL + NL),
+    parsed: ok.map((r) => ({ name: r.fileName, text: combineRecordText(r) })),
+    errors: records.filter((r) => r.error).map((r) => ({ name: r.fileName, message: r.error })),
+    records,
+  };
 }
